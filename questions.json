@@ -1,0 +1,14 @@
+[
+  {
+    "question": "What does XSS stand for?",
+    "choices": ["XML External Scripting", "Cross-Site Scripting", "Executable Server Script", "Cross Service Sockets"],
+    "correct": "Cross-Site Scripting",
+    "difficulty": "easy"
+  },
+  {
+    "question": "Which port is typically used for HTTPS?",
+    "choices": ["80", "21", "443", "25"],
+    "correct": "443",
+    "difficulty": "easy"
+  }
+]
