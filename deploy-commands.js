@@ -15,13 +15,9 @@ const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 (async () => {
   try {
     console.log('Registering commands...');
-    if (process.env.GUILD_ID) {
-      await rest.put(Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID), { body: commands });
-      console.log('Registered commands to guild', process.env.GUILD_ID);
-    } else {
-      await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body: commands });
-      console.log('Registered global commands');
-    }
+    // Register global commands so the bot works across all guilds without requiring a GUILD_ID env var.
+    await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body: commands });
+    console.log('Registered global commands');
   } catch (err) {
     console.error(err);
   }
