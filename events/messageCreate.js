@@ -23,10 +23,11 @@ module.exports = {
 				return;
 			}
 
-			// Only respond in configured progress channel
-			if (!guildCfg.progressChannel || String(message.channelId) !== String(guildCfg.progressChannel)) return;
+			// Only respond in configured progress channel or in threads under a configured forum channel
+			const channelMatches = guildCfg.progressChannel && (String(message.channelId) === String(guildCfg.progressChannel) || String(message.channel?.parentId) === String(guildCfg.progressChannel));
+			if (!channelMatches) return;
 
-			console.log('Progress channel match detected');
+			console.log('Progress channel match detected (channel=', message.channelId, 'parent=', message.channel?.parentId, ')');
 
 			// Detect attachment presence
 			if (!message.attachments || message.attachments.size === 0) {
