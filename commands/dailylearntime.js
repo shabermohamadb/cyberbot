@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, PermissionsBitField } = require('discord.js');
 const { updateGuild, readData } = require('../utils/dataStore');
+const { scheduleGuildDaily } = require('../utils/cron');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -29,6 +30,8 @@ module.exports = {
     }
     // Save to guild config
     await updateGuild(interaction.guildId, { dailyLearnTime: time, vcReminder: { time, channelId: vc.id, announceChannelId: announce.id } });
+    // schedule immediately for this guild
+    try { await scheduleGuildDaily(interaction.client, interaction.guildId, time, { channelId: vc.id, announceChannelId: announce.id }); } catch (e) { console.warn('scheduleGuildDaily failed', e && e.message); }
     interaction.editReply(`Daily learning time set to ${time} — VC: ${vc.name}, Announcements: ${announce.name} (timezone ${process.env.CRON_TZ || 'Asia/Kolkata'})`);
   }
 };

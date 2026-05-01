@@ -6,6 +6,9 @@ const { startQuiz } = require('./quizManager');
 const TIMEZONE = process.env.CRON_TZ || 'Asia/Kolkata';
 const dailySent = {}; // guildId -> date string to prevent duplicate sends
 
+// track per-guild scheduled jobs so we can cancel/reschedule
+const guildDailyJobs = new Map(); // guildId -> cron.Job
+
 const QUOTES = [
   "Small steps every day lead to big results.",
   "Consistency beats intensity — keep showing up.",
@@ -191,7 +194,77 @@ function startCrons(client) {
       console.error('Daily learn check failed', e);
     }
   }, { timezone: TIMEZONE });
+  // schedule per-guild daily jobs saved in data.json
+  (async () => {
+    try {
+      const data = await readData();
+      for (const guildId of Object.keys(data.guilds || {})) {
+        const g = data.guilds[guildId];
+        if (g && g.dailyLearnTime) {
+          try {
+            await scheduleGuildDaily(client, guildId, g.dailyLearnTime, g.vcReminder || null);
+          } catch (e) { console.warn('Failed to schedule saved daily for', guildId, e && e.message); }
+        }
+      }
+    } catch (e) { console.warn('Failed to load saved guild schedules', e && e.message); }
+  })();
   console.log('Cron jobs scheduled (timezone:', TIMEZONE, ')');
 }
 
-module.exports = { startCrons };
+// Convert HH:MM to cron expression 'M H * * *'
+function hhmmToCron(time) {
+  if (!time || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)) return null;
+  const [hh, mm] = time.split(':');
+  return `${parseInt(mm, 10)} ${parseInt(hh, 10)} * * *`;
+}
+
+async function scheduleGuildDaily(client, guildId, time, vcReminder) {
+  // cancel existing
+  try {
+    if (guildDailyJobs.has(guildId)) {
+      const existing = guildDailyJobs.get(guildId);
+      try { existing.stop(); } catch (e) {}
+      guildDailyJobs.delete(guildId);
+      console.log('Cancelled existing daily job for', guildId);
+    }
+    const cronExpr = hhmmToCron(time);
+    if (!cronExpr) return console.warn('Invalid time for scheduling daily:', time);
+    const job = cron.schedule(cronExpr, async () => {
+      try {
+        console.log('VC Reminder triggered for', guildId, 'time', time);
+        const data = await readData();
+        const g = data.guilds && data.guilds[guildId];
+        const announceId = (vcReminder && vcReminder.announceChannelId) || (g && g.vcReminder && g.vcReminder.announceChannelId) || null;
+        const targetChId = announceId || (g && (g.progressChannel || g.questChannel));
+        const ch = targetChId ? await client.channels.fetch(targetChId).catch(() => null) : null;
+        const vcMention = (vcReminder && vcReminder.channelId) || (g && g.vcReminder && g.vcReminder.channelId) ? `<#${(vcReminder && vcReminder.channelId) || (g && g.vcReminder && g.vcReminder.channelId)}>` : '';
+        if (ch) {
+          const embed = {
+            title: '🔥 DAILY LEARNING TIME! ',
+            description: `⏰ Time: ${time}\n🎧 Join VC: ${vcMention}\n📚 Duration: 10 Minutes\n\n💡 "Just 10 minutes daily can change your future."`,
+            footer: { text: "Let's grow together!" },
+            timestamp: new Date()
+          };
+          await ch.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } }).catch(() => null);
+          console.log('VC reminder sent for', guildId, 'announced in', ch.id);
+        }
+      } catch (e) {
+        console.error('Error in scheduled daily job for', guildId, e);
+      }
+    }, { timezone: TIMEZONE });
+    guildDailyJobs.set(guildId, job);
+    console.log('VC Reminder scheduled at', time, 'for guild', guildId, 'cron=', cronExpr);
+  } catch (e) {
+    console.error('Failed to schedule guild daily', guildId, e);
+  }
+}
+
+function cancelGuildDaily(guildId) {
+  if (guildDailyJobs.has(guildId)) {
+    try { guildDailyJobs.get(guildId).stop(); } catch (e) {}
+    guildDailyJobs.delete(guildId);
+    console.log('Cancelled guild daily job for', guildId);
+  }
+}
+
+module.exports = { startCrons, scheduleGuildDaily, cancelGuildDaily };

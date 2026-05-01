@@ -1,6 +1,6 @@
 const { ensureUser, readData, updateUser } = require('../utils/dataStore');
 const { checkAchievements } = require('../utils/achievements');
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, ChannelType } = require('discord.js');
 const processedMessages = new Set();
 
 module.exports = {
@@ -19,19 +19,46 @@ module.exports = {
 			const data = await readData();
 			const guildCfg = data.guilds && (data.guilds[message.guildId] || data.guilds[String(message.guildId)]);
 			if (!guildCfg) {
-				console.debug('messageCreate: no guild config for', message.guildId);
+				console.log('messageCreate: no guild config for', message.guildId, '- ignoring message');
 				return;
 			}
 
-			// Only respond in configured progress channel or in threads under a configured forum channel
-			const channelMatches = guildCfg.progressChannel && (String(message.channelId) === String(guildCfg.progressChannel) || String(message.channel?.parentId) === String(guildCfg.progressChannel));
-			if (!channelMatches) return;
+			// Only respond in configured progress channel or in threads/posts under a configured forum channel
+			const chType = message.channel && message.channel.type;
+			const isThread = message.channel && (message.channel.isThread === true || chType === ChannelType.PublicThread || chType === ChannelType.PrivateThread || chType === ChannelType.AnnouncementThread);
+			const parentId = message.channel?.parentId || (message.channel && message.channel.parent && message.channel.parent.id) || null;
+			const channelId = String(message.channelId);
+			const configured = String(guildCfg.progressChannel);
+			const parentMatches = parentId && String(parentId) === configured;
+			// also accept if configured channel is the thread itself (someone may have set a thread id)
+			const threadMatches = configured === channelId;
+			const channelMatches = guildCfg.progressChannel && (channelId === configured || parentMatches || isThread || threadMatches);
+			console.log('channelMatching debug:', { channelId, parentId, configured, isThread, parentMatches, threadMatches });
+			if (!channelMatches) {
+				console.log('messageCreate: channel does not match configured progress channel for guild', message.guildId, 'message.channel=', message.channelId, 'configured=', guildCfg.progressChannel);
+				return;
+			}
 
 			console.log('Progress channel match detected (channel=', message.channelId, 'parent=', message.channel?.parentId, ')');
 
-			// Detect attachment presence
-			if (!message.attachments || message.attachments.size === 0) {
-				try { await message.reply({ content: 'Upload screenshot', allowedMentions: { repliedUser: false } }); } catch (e) { console.warn('Failed to reply asking for screenshot', e.message); }
+			// Detect attachment or image embed presence (attachments, embeds with image, or image links)
+			const hasAttachment = message.attachments && message.attachments.size > 0;
+						const embeds = Array.isArray(message.embeds) ? message.embeds : [];
+						const embedHasImage = embeds.some(e => {
+							if (!e) return false;
+							if (e.image && (e.image.url || e.image.proxyURL)) return true;
+							if (e.thumbnail && (e.thumbnail.url || e.thumbnail.proxyURL)) return true;
+							if (e.url && /https?:\/\/\S+\.(?:png|jpe?g|gif|webp)/i.test(e.url)) return true;
+							if (e.data && (e.data.image || e.data.thumbnail)) return true;
+							// sometimes embed contains a provider or proxy url pointing to discord CDN
+							const combined = JSON.stringify(e || {});
+							if (/cdn\.discordapp\.com|attachments\/|tenor\.com|giphy\.com|media\/|media\./i.test(combined)) return true;
+							return false;
+						});
+						const urlImage = /https?:\/\/\S+\.(?:png|jpe?g|gif|webp)(?:\?\S*)?/i.test(message.content || '') || /cdn\.discordapp\.com\/attachments\//i.test(message.content || '');
+						console.log('image detection debug:', { hasAttachment, embedHasImage, urlImage });
+			if (!hasAttachment && !embedHasImage && !urlImage) {
+				try { await message.reply({ content: '⚠️ Please upload a screenshot or image (attachments/embedded images are accepted).', allowedMentions: { repliedUser: false } }); } catch (e) { console.warn('Failed to reply asking for screenshot', e && e.message); }
 				return;
 			}
 
@@ -63,6 +90,8 @@ module.exports = {
 			const newProgress = (user.progressPoints || 0) + progressGain;
 			// update user: progressPoints, streak, lastProgress and reset progressStrikes
 			await updateUser(message.author.id, { progressPoints: newProgress, streak, lastProgress: new Date().toISOString(), progressStrikes: 0 });
+
+			console.log('Progress recorded for', message.author.id, 'pointsAdded=', progressGain, 'newPoints=', newProgress, 'streak=', streak);
 
 			// React and send a single embed reply (clean UI)
 			try { await message.react('✅'); } catch (e) { console.warn('React failed', e.message); }
