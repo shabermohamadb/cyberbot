@@ -362,6 +362,7 @@ async function nightTask(client) {
 function startCrons(client) {
   if (cronsStarted) return;
   cronsStarted = true;
+  console.log('startCrons called, pid=', process.pid);
   // helper to replace job safely
   const replaceJob = (name, job) => {
     try {
@@ -369,7 +370,9 @@ function startCrons(client) {
         try { global.cronJobs[name].stop(); } catch (e) {}
       }
     } catch (e) {}
+    try { console.log('replaceJob:', name, 'pid=', process.pid); } catch (e) {}
     global.cronJobs[name] = job;
+    try { global.CRON = global.CRON || {}; global.CRON[name] = job; } catch (e) {}
   };
 
   // morning
