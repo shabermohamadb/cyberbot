@@ -1,42 +1,223 @@
 require('dotenv').config();
 const cron = require('node-cron');
-const { readData, updateUser } = require('./dataStore');
+const { readData, updateUser, updateGuild } = require('./dataStore');
 const { startQuiz } = require('./quizManager');
+const { EmbedBuilder } = require('discord.js');
 
 const TIMEZONE = process.env.CRON_TZ || 'Asia/Kolkata';
 const dailySent = {}; // guildId -> date string to prevent duplicate sends
+let cronsStarted = false; // guard to avoid scheduling twice
 
 // track per-guild scheduled jobs so we can cancel/reschedule
 const guildDailyJobs = new Map(); // guildId -> cron.Job
 
 const QUOTES = [
-  "Small steps every day lead to big results.",
-  "Consistency beats intensity — keep showing up.",
-  "Learn a little, improve a lot. You've got this!",
-  "Today +1% better than yesterday. Keep going.",
-  "Progress is progress — celebrate small wins."
+  "Success is built daily, not suddenly.",
+  "Show up even when you don’t feel like it.",
+  "Discipline creates the life motivation can’t sustain.",
+  "One step daily beats zero steps perfectly.",
+  "Consistency turns effort into results.",
+  "You don’t need speed, you need direction.",
+  "Small habits build powerful futures.",
+  "Progress is silent but powerful.",
+  "Winners repeat boring routines daily.",
+  "Motivation fades, discipline stays.",
+  "Keep going — even slow progress counts.",
+  "Your future is built by today’s actions.",
+  "No shortcuts, only consistency.",
+  "Focus > Talent.",
+  "Daily grind creates long-term shine.",
+  "Effort today = results tomorrow.",
+  "Consistency beats intensity.",
+  "Growth happens in repetition.",
+  "Be better than yesterday, that’s enough.",
+  "Show up. Do the work. Repeat.",
+  "You don’t fail, you just learn slower.",
+  "Success loves routine.",
+  "Hard work compounds silently.",
+  "Discipline is self-respect in action.",
+  "Small wins create big confidence.",
+  "Stay patient, stay consistent.",
+  "Results follow habits.",
+  "Focus on process, not outcome.",
+  "Daily effort beats random bursts.",
+  "Trust the process, not the mood.",
+  "Progress over perfection.",
+  "Consistency builds unstoppable momentum.",
+  "Your grind will pay off — just wait.",
+  "Stay locked in, no distractions.",
+  "Dreams demand discipline.",
+  "Hustle quietly, win loudly.",
+  "Keep pushing, no excuses.",
+  "Repetition creates mastery.",
+  "Effort never goes to waste.",
+  "Keep improving, no matter what.",
+  "Discipline is doing it tired.",
+  "Results respect consistency.",
+  "No pressure, just progress.",
+  "You vs You — daily battle.",
+  "Stay hungry, stay focused.",
+  "Every day matters.",
+  "Consistency creates confidence.",
+  "Your habits define your future.",
+  "Work now, shine later.",
+  "Never skip the grind."
 ];
 
 const TECH_INFO = [
-  // Coding tips
-  "Coding: Keep functions small and focused — one responsibility per function improves readability.",
-  "Coding: Write tests for edge cases and use linting to keep code consistent.",
-  "Coding: Use version control branches for features and write clear commit messages.",
-  // Data structures & algorithms
-  "Data Structure: Use hash maps for fast key-value lookups (O(1)) when order isn't required.",
-  "Algorithms: Learn sorting algorithms (quick/merge) and when to use them based on stability and average-case performance.",
-  "DS Tip: Prefer arrays for ordered collections and linked lists when you need cheap insertions/removals in the middle.",
-  // Cybersecurity
-  "Security: Keep dependencies up-to-date and run vulnerability scans regularly.",
-  "Security: Never commit secrets — use environment variables or a secrets manager.",
-  "Security: Use strong, unique passwords and enable 2FA for critical accounts.",
-  // Tech news / career
-  "News: Follow major open-source releases and RFCs to stay current with platform changes.",
-  "Career: Build a portfolio project that demonstrates end-to-end thinking (frontend, backend, tests, docs).",
-  // Study habits
-  "Study Habit: Break learning into 25-minute focused sessions (Pomodoro) and review notes afterward.",
-  "Reminder: Practice whiteboard problems to improve problem-solving under pressure."
+  "A program is a set of instructions executed by a computer.",
+  "Source code is written by developers in programming languages.",
+  "Machine code is binary executed directly by the CPU.",
+  "Compilers convert code into machine language before execution.",
+  "Interpreters execute code line by line.",
+  "JavaScript is a high-level, interpreted language.",
+  "Python emphasizes readability and simplicity.",
+  "C is a low-level, high-performance programming language.",
+  "Java uses a virtual machine (JVM) for portability.",
+  "TypeScript adds static typing to JavaScript.",
+
+  "Variables store data in memory.",
+  "Constants cannot be reassigned after initialization.",
+  "Data types define the kind of data stored.",
+  "Primitive types include number, string, boolean.",
+  "Reference types include objects and arrays.",
+  "Functions encapsulate reusable logic.",
+  "Arrow functions provide shorter syntax in JS.",
+  "Closures allow access to outer scope variables.",
+  "Scopes control variable visibility.",
+  "Global scope is accessible everywhere.",
+
+  "Local scope is limited to a block or function.",
+  "Hoisting moves declarations to the top.",
+  "Callbacks are functions passed as arguments.",
+  "Promises handle async operations.",
+  "Async/await simplifies asynchronous code.",
+  "Event-driven programming reacts to events.",
+  "The event loop manages async execution in JS.",
+  "Threads allow parallel execution.",
+  "Single-threaded means one task at a time.",
+  "Multithreading improves performance.",
+
+  "Arrays store ordered collections.",
+  "Linked lists store elements as nodes.",
+  "Stacks follow LIFO principle.",
+  "Queues follow FIFO principle.",
+  "Trees represent hierarchical data.",
+  "Graphs represent networks of nodes.",
+  "Hash maps store key-value pairs efficiently.",
+  "Sorting arranges data in order.",
+  "Searching finds specific elements.",
+  "Binary search works on sorted data.",
+
+  "Algorithms solve computational problems.",
+  "Time complexity measures speed.",
+  "Space complexity measures memory usage.",
+  "Big-O notation describes performance.",
+  "O(1) is constant time.",
+  "O(n) is linear time.",
+  "O(log n) is logarithmic time.",
+  "O(n^2) is quadratic time.",
+  "Recursion solves problems via self-calls.",
+  "Base case stops recursion.",
+
+  "Iteration uses loops to repeat tasks.",
+  "For loops run a fixed number of times.",
+  "While loops run until a condition fails.",
+  "Do-while runs at least once.",
+  "Break exits loops early.",
+  "Continue skips to next iteration.",
+  "Debugging finds and fixes errors.",
+  "Syntax errors break code execution.",
+  "Runtime errors occur during execution.",
+  "Logical errors produce wrong results.",
+
+  "Version control tracks code changes.",
+  "Git is the most popular VCS.",
+  "Repositories store project files.",
+  "Commits save snapshots of code.",
+  "Branches allow parallel development.",
+  "Merging combines branches.",
+  "Pull requests review changes.",
+  "CI/CD automates testing and deployment.",
+  "Build systems compile and bundle code.",
+  "Package managers install dependencies.",
+
+  "NPM manages JavaScript packages.",
+  "APIs enable software communication.",
+  "REST APIs use HTTP methods.",
+  "GraphQL allows flexible queries.",
+  "Endpoints define API routes.",
+  "JSON is used for data exchange.",
+  "XML is another data format.",
+  "Authentication verifies identity.",
+  "JWT is used for secure auth.",
+  "OAuth enables third-party login.",
+
+  "Frontend handles UI and UX.",
+  "Backend manages logic and databases.",
+  "Full-stack developers handle both.",
+  "HTML structures web pages.",
+  "CSS styles web pages.",
+  "JavaScript adds interactivity.",
+  "React is a frontend library.",
+  "Node.js runs JS on servers.",
+  "Express is a Node.js framework.",
+  "Databases store persistent data.",
+
+  "SQL databases use structured tables.",
+  "NoSQL databases are flexible.",
+  "MongoDB is a NoSQL database.",
+  "Indexes speed up queries.",
+  "Normalization reduces redundancy.",
+  "Caching improves performance.",
+  "Redis is used for caching.",
+  "Load balancing distributes traffic.",
+  "Microservices split applications.",
+  "Monolith is a single large system.",
+
+  "Docker packages apps into containers.",
+  "Kubernetes manages containers.",
+  "Cloud computing provides scalability.",
+  "AWS is a major cloud provider.",
+  "Serverless runs code without servers.",
+  "Virtual machines emulate hardware.",
+  "Operating systems manage resources.",
+  "Linux is widely used in servers.",
+  "Windows is common for desktops.",
+  "MacOS is Unix-based.",
+
+  "Encryption secures data.",
+  "Hashing creates fixed-length values.",
+  "HTTPS ensures secure communication.",
+  "Firewalls protect networks.",
+  "VPN secures internet traffic.",
+  "Latency is network delay.",
+  "Bandwidth is data capacity.",
+  "CDN speeds up content delivery.",
+  "DNS resolves domain names.",
+  "IP addresses identify devices.",
+
+  "Unit testing tests individual parts.",
+  "Integration testing tests modules together.",
+  "E2E testing tests full workflows.",
+  "Test automation saves time.",
+  "Refactoring improves code structure.",
+  "Clean code improves readability.",
+  "Design patterns solve common problems.",
+  "MVC separates concerns.",
+  "Agile is iterative development.",
+  "Scrum is a popular Agile framework."
 ];
+
+function pickRandomAvoidRepeat(arr, lastIndex) {
+  if (!Array.isArray(arr) || arr.length === 0) return { item: null, index: -1 };
+  if (arr.length === 1) return { item: arr[0], index: 0 };
+  let idx = Math.floor(Math.random() * arr.length);
+  if (idx === lastIndex) {
+    idx = (idx + 1) % arr.length;
+  }
+  return { item: arr[idx], index: idx };
+}
 
 async function morningTask(client) {
   console.log('Cron: morning task running');
@@ -46,14 +227,31 @@ async function morningTask(client) {
     if (!g || !g.progressChannel) continue;
     const ch = await client.channels.fetch(g.progressChannel).catch(() => null);
     if (ch) {
-      const q = QUOTES[Math.floor(Math.random() * QUOTES.length)];
-      const embed = {
-        title: '🌅 Daily Motivation',
-        description: `💬 ${q}`,
-        footer: { text: 'Stay consistent 🔥' },
-        timestamp: new Date()
-      };
-      ch.send({ embeds: [embed] });
+      const todayKey = new Date().toISOString().slice(0,10);
+      // check guild-stored lastQuoteDate to avoid duplicates across restarts
+      if (g.lastQuoteDate && g.lastQuoteDate === todayKey) {
+        console.log('Morning motivation already sent today for', guildId);
+        continue;
+      }
+      const pick = pickRandomAvoidRepeat(QUOTES, g.lastQuoteIndex);
+      const q = pick.item;
+      const embed = new EmbedBuilder()
+        .setColor(0x0099FF)
+        .setTitle('💡 Daily Motivation')
+        .setDescription([
+          '💬 **Hey everyone! Hope you\'re doing great 😊**',
+          '',
+          '📌 Stay consistent with your daily learning!',
+          '',
+          '💡 **Today\'s Motivation:**',
+          `"${q}"`,
+          '',
+          '🔥 Keep pushing — you\'re improving!'
+        ].join('\n'))
+        .setFooter({ text: 'Stay consistent 🔥' })
+        .setTimestamp();
+      await ch.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } }).catch(() => null);
+      await updateGuild(guildId, { lastQuoteDate: todayKey, lastQuoteIndex: pick.index });
       console.log('Motivation sent to', guildId);
     }
   }
@@ -68,8 +266,16 @@ async function quizTask(client) {
     const ch = await client.channels.fetch(g.questChannel).catch(() => null);
     if (ch) {
       try {
+        const todayKey = new Date().toISOString().slice(0, 10);
+        if (g.lastQuizDate && g.lastQuizDate === todayKey) {
+          console.log('Quiz already sent today for', guildId);
+          continue;
+        }
         console.log('Cron: sending quiz to', guildId);
-        await startQuiz(ch, client);
+        const active = await startQuiz(ch, client);
+        if (active) {
+          await updateGuild(guildId, { lastQuizDate: todayKey });
+        }
       } catch (e) { console.error('Quiz send failed', e); }
     }
   }
@@ -82,7 +288,13 @@ async function eveningTask(client) {
     const g = data.guilds[guildId];
     if (!g.progressChannel) continue;
     const ch = await client.channels.fetch(g.progressChannel).catch(() => null);
-    if (ch) ch.send('⏰ Reminder: Post a progress screenshot to keep your streak alive — consistency wins.');
+    if (ch) {
+      const embed = new EmbedBuilder()
+        .setColor(0x0099FF)
+        .setDescription(['📌 **Reminder**', '', '⏳ Post a progress screenshot to keep your streak alive — consistency wins.'].join('\n'))
+        .setTimestamp();
+      await ch.send({ embeds: [embed] }).catch(() => null);
+    }
   }
 }
 
@@ -104,15 +316,28 @@ async function nightTask(client) {
     }
     const ch = await client.channels.fetch(g.questChannel).catch(() => null);
     if (ch) {
-      const users = Object.entries(data.users || {}).map(([id, u]) => ({ id, progressPoints: u.progressPoints || 0 }));
-      users.sort((a, b) => b.progressPoints - a.progressPoints);
-      const top = users.slice(0, 3).map((u, i) => `#${i + 1} <@${u.id}> — ${u.progressPoints} pts`).join('\n') || 'No users yet.';
-      ch.send(`Nightly leaderboard:\n${top}`);
+        const users = Object.entries(data.users || {}).map(([id, u]) => ({ id, progressPoints: u.progressPoints || 0 }));
+        users.sort((a, b) => b.progressPoints - a.progressPoints);
+        const top = users.slice(0, 5).map((u, i) => {
+          if (i === 0) return `🥇 1. <@${u.id}> — ${u.progressPoints} pts`;
+          if (i === 1) return `🥈 2. <@${u.id}> — ${u.progressPoints} pts`;
+          if (i === 2) return `🥉 3. <@${u.id}> — ${u.progressPoints} pts`;
+          return `${i + 1}. <@${u.id}> — ${u.progressPoints} pts`;
+        }).join('\n') || 'No users yet.';
+        const embed = new EmbedBuilder()
+          .setTitle('🏆 Nightly Leaderboard')
+          .setDescription(top)
+          .setColor(0xFFD700)
+          .setTimestamp()
+          .setFooter({ text: 'Keep grinding 🔥' });
+        await ch.send({ embeds: [embed] }).catch(() => null);
     }
   }
 }
 
 function startCrons(client) {
+  if (cronsStarted) return;
+  cronsStarted = true;
   // morning
   cron.schedule(process.env.CRON_MORNING || '0 8 * * *', () => morningTask(client), { timezone: TIMEZONE });
   // quiz
@@ -158,33 +383,43 @@ function startCrons(client) {
           }
         }
 
-        // Quote schedule
+        // Quote schedule (per-guild)
         if (g.quoteSchedule && g.quoteSchedule.time === hhmm) {
-          const last = dailySent[guildId + '-quote'];
           const todayKey = now.toISOString().slice(0,10);
-          if (last !== todayKey) {
-            dailySent[guildId + '-quote'] = todayKey;
+          if (!g.lastQuoteDate || g.lastQuoteDate !== todayKey) {
             const ch = g.quoteSchedule.channelId ? await client.channels.fetch(g.quoteSchedule.channelId).catch(() => null) : null;
             if (ch) {
-              const q = QUOTES[Math.floor(Math.random() * QUOTES.length)];
-              const embed = { title: '🌅 Daily Motivation', description: `💬 ${q}`, footer: { text: 'Stay consistent 🔥' }, timestamp: new Date() };
-              await ch.send({ embeds: [embed] }).catch(() => null);
+              const pick = pickRandomAvoidRepeat(QUOTES, g.lastQuoteIndex);
+              const q = pick.item;
+              const embed = new EmbedBuilder()
+                .setTitle('💡 Daily Motivation')
+                .setColor(0x0099FF)
+                .setDescription(['💬 **Hey everyone! Hope you\'re doing great 😊**', '', '📌 Stay consistent with your daily learning!', '', '💡 **Today\'s Motivation:**', `"${q}"`, '', '🔥 Keep pushing — you\'re improving!'].join('\n'))
+                .setFooter({ text: 'Stay consistent 🔥' })
+                .setTimestamp();
+              await ch.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } }).catch(() => null);
+              await updateGuild(guildId, { lastQuoteDate: todayKey, lastQuoteIndex: pick.index });
               console.log('Quote sent to', guildId, g.quoteSchedule.channelId);
             }
           }
         }
 
-        // Information schedule
+        // Information schedule (per-guild)
         if (g.infoSchedule && g.infoSchedule.time === hhmm) {
-          const last = dailySent[guildId + '-info'];
           const todayKey = now.toISOString().slice(0,10);
-          if (last !== todayKey) {
-            dailySent[guildId + '-info'] = todayKey;
+          if (!g.lastInfoDate || g.lastInfoDate !== todayKey) {
             const ch = g.infoSchedule.channelId ? await client.channels.fetch(g.infoSchedule.channelId).catch(() => null) : null;
             if (ch) {
-              const info = TECH_INFO[Math.floor(Math.random() * TECH_INFO.length)];
-              const embed = { title: '📘 Daily Tech Info', description: `${info}`, footer: { text: 'Useful for students — learn daily' }, timestamp: new Date() };
-              await ch.send({ embeds: [embed] }).catch(() => null);
+              const pick = pickRandomAvoidRepeat(TECH_INFO, g.lastInfoIndex);
+              const info = pick.item;
+              const embed = new EmbedBuilder()
+                .setTitle('📢 Daily Learning Tip')
+                .setColor(0x7B61FF)
+                .setDescription(['📢 **Daily Learning Tip**', '', `🧠 Topic: ${info.split(':')[0] || 'General'}`, '', `💡 Tip:\n"${info.replace(/^\w+:\s*/,'')}"`, '', '🚀 Small knowledge daily = big growth!'].join('\n'))
+                .setFooter({ text: 'Keep learning 🚀' })
+                .setTimestamp();
+              await ch.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } }).catch(() => null);
+              await updateGuild(guildId, { lastInfoDate: todayKey, lastInfoIndex: pick.index });
               console.log('Info sent to', guildId, g.infoSchedule.channelId);
             }
           }

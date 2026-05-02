@@ -72,10 +72,29 @@ async function getQuestion() {
       return { question, correct: correct.trim(), incorrect, difficulty: q.difficulty || 'medium' };
     }
     // fallback to local if API failed to provide clean options
+    console.log('OpenTDB returned no usable question after attempts — using fallback');
     return await loadLocalQuestion();
   } catch (e) {
+    console.log('OpenTDB API fetch failed, using fallback. Error:', e && e.message);
     return await loadLocalQuestion();
   }
+}
+
+// Public wrappers to provide clear, testable functions per requirements
+async function getQuizFromAPI() {
+  return await getQuestion();
+}
+
+async function getFallbackQuiz() {
+  return await loadLocalQuestion();
+}
+
+function decodeHTML(text) {
+  return decodeHTMLEntities(text);
+}
+
+async function sendQuiz(channel, client, seconds) {
+  return await startQuiz(channel, client, seconds);
 }
 
 function shuffleOptions(correct, incorrect) {
@@ -115,13 +134,21 @@ function difficultyBonus(difficulty) {
 }
 
 function formatQuestionEmbed(q, timeLeft) {
-  // Motivational quiz embed: challenge, difficulty and countdown
+  // Clean daily-quiz UI using allowed emojis and Info color
+  const descParts = [];
+  if (typeof timeLeft === 'number') descParts.push(`⏳ Time: ${timeLeft}s`);
+  descParts.push('Answer quickly to earn more XP');
+  descParts.push('');
+  descParts.push(q.question);
+
   const embed = new EmbedBuilder()
-    .setTitle('Quick Quiz — Rise to the Challenge!')
-    .setDescription(`${q.question}\n\nBe quick and confident — fast answers earn bonus XP!`)
-    .setColor(0x00AE86)
+    .setTitle('🧠 Daily Quiz')
+    .setDescription(descParts.join('\n'))
+    .setColor(0x0099FF)
     .addFields({ name: 'Difficulty', value: (q.difficulty || 'medium').toString(), inline: true });
-  if (typeof timeLeft === 'number') embed.setFooter({ text: `Time left: ${timeLeft}s — go!` });
+
+  embed.setFooter({ text: 'Choose the correct answer below' });
+  if (typeof timeLeft === 'number') embed.setTimestamp();
   return embed;
 }
 
@@ -148,12 +175,7 @@ async function startQuiz(channel, client, seconds = parseInt(process.env.QUIZ_TI
     );
   }
 
-  const intro = new EmbedBuilder()
-    .setTitle('Challenge Awaits')
-    .setDescription(`A quick ${seconds}s quiz has started — first correct answers win bonus XP!`) 
-    .setColor(0x0099ff)
-    .setFooter({ text: 'Answer fast. Earn more. Keep leveling up.' });
-  await channel.send({ embeds: [intro] });
+  // Post the quiz embed (mass-style spacing handled by embed description)
   const msg = await channel.send({ embeds: [embed], components: [row] });
 
   // countdown
@@ -176,16 +198,16 @@ async function startQuiz(channel, client, seconds = parseInt(process.env.QUIZ_TI
     try {
       const uid = interaction.user.id;
       if (responses[uid]) {
-        await interaction.reply({ content: 'You have already answered this quiz.', ephemeral: true });
+        await interaction.reply({ embeds: [new EmbedBuilder().setColor(0xFFA500).setDescription('⚠️ You have already answered this quiz.')], ephemeral: true });
         return;
       }
       const idx = parseInt(interaction.customId.split('_')[1], 10);
       const elapsed = Math.floor((Date.now() - startTime) / 1000);
       responses[uid] = { index: idx, time: elapsed };
-      await interaction.reply({ content: `Answer recorded: ${String.fromCharCode(65 + idx)}`, ephemeral: true });
+      await interaction.reply({ embeds: [new EmbedBuilder().setColor(0x00AE86).setDescription(`✅ Answer recorded: ${String.fromCharCode(65 + idx)}`)], ephemeral: true });
       console.log('Answer received from', uid, 'index', idx);
     } catch (e) {
-      try { await interaction.reply({ content: 'Error recording answer', ephemeral: true }); } catch (er) {}
+      try { await interaction.reply({ embeds: [new EmbedBuilder().setColor(0xFFA500).setDescription('⚠️ Error recording answer')], ephemeral: true }); } catch (er) {}
     }
   });
 
@@ -208,12 +230,13 @@ async function startQuiz(channel, client, seconds = parseInt(process.env.QUIZ_TI
     }
     winners.sort((a, b) => a.time - b.time);
 
-    const resultEmbed = new EmbedBuilder()
-      .setTitle('Quiz Results — Great Effort!')
-      .setColor(0xffa500)
-      .addFields({ name: 'Question', value: q.question })
-      .addFields({ name: 'Correct Answer', value: options[correctIndex] })
-      .setDescription('Well played — every attempt builds skill. Winners earn speed + difficulty bonuses.');
+      const resultEmbed = new EmbedBuilder()
+        .setTitle('🧠 Quiz Results')
+        .setColor(0x00AE86)
+        .addFields({ name: 'Question', value: q.question })
+        .addFields({ name: 'Correct Answer', value: options[correctIndex] })
+        .setDescription('Well played — winners earn speed + difficulty bonuses.')
+        .setTimestamp();
 
     if (winners.length === 0) {
       resultEmbed.addFields({ name: 'Winners', value: 'No one answered correctly this time — try again!' });
@@ -253,7 +276,13 @@ function startDailyJobs(client) {
         const g = data.guilds[guildId];
         if (!g.questChannel) continue;
         const ch = await client.channels.fetch(g.questChannel).catch(() => null);
-        if (ch) ch.send('🌅 Good morning! Small steps win races — one short study session today can make a big difference.');
+        if (ch) {
+          const embed = new EmbedBuilder()
+            .setColor(0x0099FF)
+            .setDescription(['💬 **Hey everyone! Hope you\'re doing great**', '', '📌 Small steps win races — one short study session today can make a big difference.', '', '🔥 Keep pushing forward — small steps matter!'].join('\n'))
+            .setTimestamp();
+          await ch.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } }).catch(() => null);
+        }
       }
     } catch (e) {}
   });
@@ -279,7 +308,13 @@ function startDailyJobs(client) {
         const g = data.guilds[guildId];
         if (!g.progressChannel) continue;
         const ch = await client.channels.fetch(g.progressChannel).catch(() => null);
-        if (ch) ch.send('⏰ Reminder: Post a progress screenshot to keep your streak alive — consistency beats intensity. You got this!');
+        if (ch) {
+          const embed = new EmbedBuilder()
+            .setColor(0x0099FF)
+            .setDescription(['📌 **Reminder**', '', '⏳ Post a progress screenshot to keep your streak alive — consistency wins.'].join('\n'))
+            .setTimestamp();
+          await ch.send({ embeds: [embed] }).catch(() => null);
+        }
       }
     } catch (e) {}
   });
@@ -295,14 +330,22 @@ function startDailyJobs(client) {
         if (!ch) continue;
         const users = Object.entries(data.users || {}).map(([id, u]) => ({ id, progressPoints: u.progressPoints || 0 }));
         users.sort((a, b) => b.progressPoints - a.progressPoints);
-        const embed = new EmbedBuilder().setTitle('Daily Top 3').setColor(0x00ff00);
-        for (let i = 0; i < Math.min(3, users.length); i++) {
-          embed.addFields({ name: `#${i + 1}`, value: `<@${users[i].id}> — ${users[i].progressPoints} pts` });
-        }
+        const lines = users.slice(0, 5).map((u, i) => {
+          if (i === 0) return `🥇 1. <@${u.id}> — ${u.progressPoints} pts`;
+          if (i === 1) return `🥈 2. <@${u.id}> — ${u.progressPoints} pts`;
+          if (i === 2) return `🥉 3. <@${u.id}> — ${u.progressPoints} pts`;
+          return `${i + 1}. <@${u.id}> — ${u.progressPoints} pts`;
+        }).join('\n') || 'No users yet.';
+        const embed = new EmbedBuilder()
+          .setTitle('🏆 Daily Top')
+          .setDescription(lines)
+          .setColor(0xFFD700)
+          .setFooter({ text: 'Keep grinding 🔥' })
+          .setTimestamp();
         await ch.send({ embeds: [embed] });
       }
     } catch (e) { console.error(e); }
   });
 }
 
-module.exports = { startQuiz, startDailyJobs, getActiveQuiz };
+module.exports = { startQuiz, startDailyJobs, getActiveQuiz, getQuizFromAPI, getFallbackQuiz, shuffleOptions, decodeHTML, sendQuiz };

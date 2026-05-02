@@ -30,9 +30,10 @@ module.exports = {
           "Progress is progress — celebrate small wins."
         ];
         const q = QUOTES[Math.floor(Math.random() * QUOTES.length)];
-        const embed = { title: '🌅 Daily Motivation', description: `💬 ${q}`, footer: { text: 'Stay consistent 🔥' }, timestamp: new Date() };
+        const embed = { title: '💬 Daily Motivation', description: `${q}`, footer: { text: 'Stay consistent 🔥' }, timestamp: new Date() };
         await ch.send({ embeds: [embed] });
-        return interaction.editReply('Quote sent.');
+        await require('../utils/dataStore').updateGuild(interaction.guild.id, { lastQuoteDate: new Date().toISOString().slice(0,10) });
+        return interaction.editReply({ embeds: [new (require('discord.js').EmbedBuilder)().setColor(0x0099FF).setDescription('Motivation sent.')] });
       }
       if (type === 'info') {
         const chId = g.infoSchedule && g.infoSchedule.channelId;
@@ -40,20 +41,142 @@ module.exports = {
         const ch = await interaction.client.channels.fetch(chId).catch(() => null);
         if (!ch) return interaction.editReply('Cannot fetch info channel.');
         const TECH_INFO = [
-          "Coding: Keep functions small and focused — one responsibility per function improves readability.",
-          "Coding: Write tests for edge cases and use linting to keep code consistent.",
-          "Data Structure: Use hash maps for fast key-value lookups (O(1)) when order isn't required.",
-          "Algorithms: Learn sorting algorithms (quick/merge) and when to use them based on stability and average-case performance.",
-          "Security: Keep dependencies up-to-date and run vulnerability scans regularly.",
-          "Security: Never commit secrets — use environment variables or a secrets manager.",
-          "News: Follow major open-source releases and RFCs to stay current with platform changes.",
-          "Career: Build a portfolio project that demonstrates end-to-end thinking (frontend, backend, tests, docs).",
-          "Study Habit: Break learning into 25-minute focused sessions (Pomodoro) and review notes afterward."
+          "A program is a set of instructions executed by a computer.",
+          "Source code is written by developers in programming languages.",
+          "Machine code is binary executed directly by the CPU.",
+          "Compilers convert code into machine language before execution.",
+          "Interpreters execute code line by line.",
+          "JavaScript is a high-level, interpreted language.",
+          "Python emphasizes readability and simplicity.",
+          "C is a low-level, high-performance programming language.",
+          "Java uses a virtual machine (JVM) for portability.",
+          "TypeScript adds static typing to JavaScript.",
+          "Variables store data in memory.",
+          "Constants cannot be reassigned after initialization.",
+          "Data types define the kind of data stored.",
+          "Primitive types include number, string, boolean.",
+          "Reference types include objects and arrays.",
+          "Functions encapsulate reusable logic.",
+          "Arrow functions provide shorter syntax in JS.",
+          "Closures allow access to outer scope variables.",
+          "Scopes control variable visibility.",
+          "Global scope is accessible everywhere.",
+          "Local scope is limited to a block or function.",
+          "Hoisting moves declarations to the top.",
+          "Callbacks are functions passed as arguments.",
+          "Promises handle async operations.",
+          "Async/await simplifies asynchronous code.",
+          "Event-driven programming reacts to events.",
+          "The event loop manages async execution in JS.",
+          "Threads allow parallel execution.",
+          "Single-threaded means one task at a time.",
+          "Multithreading improves performance.",
+          "Arrays store ordered collections.",
+          "Linked lists store elements as nodes.",
+          "Stacks follow LIFO principle.",
+          "Queues follow FIFO principle.",
+          "Trees represent hierarchical data.",
+          "Graphs represent networks of nodes.",
+          "Hash maps store key-value pairs efficiently.",
+          "Sorting arranges data in order.",
+          "Searching finds specific elements.",
+          "Binary search works on sorted data.",
+          "Algorithms solve computational problems.",
+          "Time complexity measures speed.",
+          "Space complexity measures memory usage.",
+          "Big-O notation describes performance.",
+          "O(1) is constant time.",
+          "O(n) is linear time.",
+          "O(log n) is logarithmic time.",
+          "O(n^2) is quadratic time.",
+          "Recursion solves problems via self-calls.",
+          "Base case stops recursion.",
+          "Iteration uses loops to repeat tasks.",
+          "For loops run a fixed number of times.",
+          "While loops run until a condition fails.",
+          "Do-while runs at least once.",
+          "Break exits loops early.",
+          "Continue skips to next iteration.",
+          "Debugging finds and fixes errors.",
+          "Syntax errors break code execution.",
+          "Runtime errors occur during execution.",
+          "Logical errors produce wrong results.",
+          "Version control tracks code changes.",
+          "Git is the most popular VCS.",
+          "Repositories store project files.",
+          "Commits save snapshots of code.",
+          "Branches allow parallel development.",
+          "Merging combines branches.",
+          "Pull requests review changes.",
+          "CI/CD automates testing and deployment.",
+          "Build systems compile and bundle code.",
+          "Package managers install dependencies.",
+          "NPM manages JavaScript packages.",
+          "APIs enable software communication.",
+          "REST APIs use HTTP methods.",
+          "GraphQL allows flexible queries.",
+          "Endpoints define API routes.",
+          "JSON is used for data exchange.",
+          "XML is another data format.",
+          "Authentication verifies identity.",
+          "JWT is used for secure auth.",
+          "OAuth enables third-party login.",
+          "Frontend handles UI and UX.",
+          "Backend manages logic and databases.",
+          "Full-stack developers handle both.",
+          "HTML structures web pages.",
+          "CSS styles web pages.",
+          "JavaScript adds interactivity.",
+          "React is a frontend library.",
+          "Node.js runs JS on servers.",
+          "Express is a Node.js framework.",
+          "Databases store persistent data.",
+          "SQL databases use structured tables.",
+          "NoSQL databases are flexible.",
+          "MongoDB is a NoSQL database.",
+          "Indexes speed up queries.",
+          "Normalization reduces redundancy.",
+          "Caching improves performance.",
+          "Redis is used for caching.",
+          "Load balancing distributes traffic.",
+          "Microservices split applications.",
+          "Monolith is a single large system.",
+          "Docker packages apps into containers.",
+          "Kubernetes manages containers.",
+          "Cloud computing provides scalability.",
+          "AWS is a major cloud provider.",
+          "Serverless runs code without servers.",
+          "Virtual machines emulate hardware.",
+          "Operating systems manage resources.",
+          "Linux is widely used in servers.",
+          "Windows is common for desktops.",
+          "MacOS is Unix-based.",
+          "Encryption secures data.",
+          "Hashing creates fixed-length values.",
+          "HTTPS ensures secure communication.",
+          "Firewalls protect networks.",
+          "VPN secures internet traffic.",
+          "Latency is network delay.",
+          "Bandwidth is data capacity.",
+          "CDN speeds up content delivery.",
+          "DNS resolves domain names.",
+          "IP addresses identify devices.",
+          "Unit testing tests individual parts.",
+          "Integration testing tests modules together.",
+          "E2E testing tests full workflows.",
+          "Test automation saves time.",
+          "Refactoring improves code structure.",
+          "Clean code improves readability.",
+          "Design patterns solve common problems.",
+          "MVC separates concerns.",
+          "Agile is iterative development.",
+          "Scrum is a popular Agile framework."
         ];
         const info = TECH_INFO[Math.floor(Math.random() * TECH_INFO.length)];
-        const embed = { title: '📘 Daily Tech Info', description: `${info}`, footer: { text: 'Useful for students — learn daily' }, timestamp: new Date() };
+        const embed = { title: '💡 Daily Tech Info', description: `${info}`, footer: { text: 'Useful for students — learn daily' }, timestamp: new Date() };
         await ch.send({ embeds: [embed] });
-        return interaction.editReply('Information sent.');
+        await require('../utils/dataStore').updateGuild(interaction.guild.id, { lastInfoDate: new Date().toISOString().slice(0,10) });
+        return interaction.editReply({ embeds: [new (require('discord.js').EmbedBuilder)().setColor(0x0099FF).setDescription('Information sent.')] });
       }
       if (type === 'learn') {
         const announceId = g.vcReminder && g.vcReminder.announceChannelId ? g.vcReminder.announceChannelId : null;
@@ -63,13 +186,13 @@ module.exports = {
         if (!ch) return interaction.editReply('Cannot fetch target channel.');
         const vcMention = g.vcReminder && g.vcReminder.channelId ? `<#${g.vcReminder.channelId}>` : '';
         const embed = {
-          title: '🔥 DAILY LEARNING TIME! ',
-          description: `⏰ Time: ${g.dailyLearnTime || 'now'}\n🎧 Join VC: ${vcMention}\n📚 Duration: 10 Minutes\n\n💡 "Just 10 minutes daily can change your future."`,
+          title: '🔥 DAILY LEARNING TIME!',
+          description: `⏳ Time: ${g.dailyLearnTime || 'now'}\nJoin VC: ${vcMention}\nDuration: 10 Minutes\n\n💡 "Just 10 minutes daily can change your future."`,
           footer: { text: 'Let\'s grow together!' },
           timestamp: new Date()
         };
         await ch.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } }).catch(() => null);
-        return interaction.editReply('Daily learning announcement sent.');
+        return interaction.editReply({ embeds: [new (require('discord.js').EmbedBuilder)().setColor(0x0099FF).setDescription('Daily learning announcement sent.')] });
       }
       return interaction.editReply('Unknown type. Use quote|info|learn');
     } catch (e) {

@@ -26,6 +26,11 @@ module.exports = {
     try {
       const d = await require('../utils/dataStore').readData();
       const g = d.guilds && d.guilds[guildId];
+      const todayKey = new Date().toISOString().slice(0,10);
+      if (g && g.lastQuizDate && g.lastQuizDate === todayKey) {
+        const warn = new EmbedBuilder().setColor(0xFFA500).setDescription('⚠️ A quiz has already been sent today. Try again tomorrow.');
+        try { return await interaction.editReply({ embeds: [warn] }); } catch (e) { return; }
+      }
       if (g && g.questChannel) {
         const fetched = await interaction.client.channels.fetch(g.questChannel).catch(() => null);
         if (fetched) targetChannel = fetched;
@@ -38,17 +43,25 @@ module.exports = {
     try {
       const member = interaction.member;
       if (member && (member.permissions.has(PermissionsBitField.Flags.Administrator) || member.permissions.has(PermissionsBitField.Flags.ManageGuild))) {
-        await targetChannel.send({ content: `@everyone Quiz is live! You have ${seconds}s to answer.`, allowedMentions: { parse: ['everyone'] } });
+        const announce = new EmbedBuilder()
+          .setColor(0x0099FF)
+          .setDescription(`💬 **Quiz is live!**\nYou have ⏳ ${seconds}s to answer.`)
+          .setTimestamp();
+        await targetChannel.send({ content: '@everyone', embeds: [announce], allowedMentions: { parse: ['everyone'] } });
       }
     } catch (e) { console.warn('Failed to send mention', e.message); }
 
     const active = await startQuiz(targetChannel, interaction.client, seconds).catch(() => null);
-    if (!active) return interaction.editReply('A quiz is already running or could not fetch a question. Try again later.');
+    if (!active) {
+      const warn = new EmbedBuilder().setColor(0xFFA500).setDescription('⚠️ A quiz is already running or no question could be fetched. Try again later.');
+      return interaction.editReply({ embeds: [warn] }).catch(() => null);
+    }
 
     const embed = new EmbedBuilder()
-      .setTitle('Quiz Starting')
-      .setDescription(`Quick quiz started — time limit: ${seconds}s`)
-      .setColor(0x00AE86);
+      .setTitle('🧠 Daily Quiz')
+      .setDescription(`⏳ Time: ${seconds}s\nAnswer quickly to earn more XP`)
+      .setColor(0x0099FF)
+      .setTimestamp();
 
     await interaction.editReply({ embeds: [embed] });
   }

@@ -25,6 +25,13 @@ async function ensureGuild(guildId) {
   const data = await readData();
   if (!data.guilds) data.guilds = {};
   if (!data.guilds[guildId]) data.guilds[guildId] = { progressChannel: null, questChannel: null, aiChannel: null, vcReminder: null, quoteSchedule: null, infoSchedule: null, dailyLearnTime: null };
+  // add last-sent tracking keys
+  const g = data.guilds[guildId];
+  if (typeof g.lastQuoteDate === 'undefined') g.lastQuoteDate = null;
+  if (typeof g.lastInfoDate === 'undefined') g.lastInfoDate = null;
+  if (typeof g.lastQuizDate === 'undefined') g.lastQuizDate = null;
+  if (typeof g.lastQuoteIndex === 'undefined') g.lastQuoteIndex = null;
+  if (typeof g.lastInfoIndex === 'undefined') g.lastInfoIndex = null;
   await writeData(data);
   return data.guilds[guildId];
 }

@@ -58,7 +58,13 @@ module.exports = {
 						const urlImage = /https?:\/\/\S+\.(?:png|jpe?g|gif|webp)(?:\?\S*)?/i.test(message.content || '') || /cdn\.discordapp\.com\/attachments\//i.test(message.content || '');
 						console.log('image detection debug:', { hasAttachment, embedHasImage, urlImage });
 			if (!hasAttachment && !embedHasImage && !urlImage) {
-				try { await message.reply({ content: '⚠️ Please upload a screenshot or image (attachments/embedded images are accepted).', allowedMentions: { repliedUser: false } }); } catch (e) { console.warn('Failed to reply asking for screenshot', e && e.message); }
+				try {
+					const warn = new EmbedBuilder()
+						.setColor(0xFFA500)
+						.setDescription('⚠️ Please upload a screenshot or image (attachments/embedded images are accepted).')
+						.setTimestamp();
+					await message.reply({ embeds: [warn], allowedMentions: { repliedUser: false } });
+				} catch (e) { console.warn('Failed to reply asking for screenshot', e && e.message); }
 				return;
 			}
 
@@ -76,7 +82,10 @@ module.exports = {
 				const lastDate = new Date(new Date(last).toDateString());
 				// If user already posted today, don't award again
 				if (lastDate.getTime() === todayStart.getTime()) {
-					try { await message.reply({ content: '⚠️ You already submitted today. Come back tomorrow!', allowedMentions: { repliedUser: false } }); } catch (e) { console.warn('Reply failed', e.message); }
+					try {
+						const warn = new EmbedBuilder().setColor(0xFFA500).setDescription('⚠️ You already submitted today. Come back tomorrow!').setTimestamp();
+						await message.reply({ embeds: [warn], allowedMentions: { repliedUser: false } });
+					} catch (e) { console.warn('Reply failed', e.message); }
 					return;
 				}
 				if (lastDate.getTime() === yesterday.getTime()) {
