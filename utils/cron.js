@@ -364,6 +364,11 @@ function startCrons(client) {
         if (g.dailyLearnTime && g.dailyLearnTime === hhmm) {
           const last = dailySent[guildId + '-dailyLearn'];
           const todayKey = now.toISOString().slice(0,10);
+          // If we've scheduled a dedicated per-guild job for this guild, let that job handle the announcement
+          if (guildDailyJobs.has(guildId)) {
+            // per-guild cron will trigger at the same time; skip per-minute dispatcher
+            continue;
+          }
           if (last !== todayKey) {
             dailySent[guildId + '-dailyLearn'] = todayKey;
             const announceId = g.vcReminder && g.vcReminder.announceChannelId ? g.vcReminder.announceChannelId : null;

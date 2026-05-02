@@ -12,6 +12,14 @@ module.exports = {
 			return;
 		}
 
+		// Skip messages that were created before the bot finished booting to avoid replay duplicates
+		try {
+			if (client && client.bootTime && message.createdTimestamp && message.createdTimestamp < (client.bootTime - 5000)) {
+				console.log('messageCreate: skipping old message created before boot', message.id, new Date(message.createdTimestamp).toISOString());
+				return;
+			}
+		} catch (e) {}
+
 		// Log receipt
 		console.log(`messageCreate received: id=${message.id} guild=${message.guildId} channel=${message.channelId} author=${message.author.id} attachments=${message.attachments.size}`);
 		if (message.author.bot) return;

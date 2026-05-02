@@ -3,6 +3,8 @@ module.exports = {
   once: true,
   async execute(client) {
     console.log(`Ready! Logged in as ${client.user.tag}`);
+    // mark boot time to avoid replaying old messages that may be emitted on startup
+    try { client.bootTime = Date.now(); } catch (e) {}
     // start cron jobs after client is ready
     try {
       const { startCrons } = require('../utils/cron');
