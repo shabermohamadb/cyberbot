@@ -15,6 +15,10 @@ module.exports = {
       setTimeout(() => { try { processedInteractions.delete(interaction.id); } catch (e) {} }, 30 * 1000);
     } catch (e) {}
     try {
+      if (interaction.deferred || interaction.replied) {
+        console.log('interactionCreate: interaction already replied/deferred, skipping', interaction.id);
+        return;
+      }
       if (interaction.isChatInputCommand()) {
         const cmd = client.commands.get(interaction.commandName);
         if (!cmd) return;

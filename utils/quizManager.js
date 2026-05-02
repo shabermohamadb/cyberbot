@@ -267,8 +267,12 @@ function getActiveQuiz() {
   return activeQuiz;
 }
 
+let dailyJobsStarted = false;
 function startDailyJobs(client) {
+  if (dailyJobsStarted) return;
+  dailyJobsStarted = true;
   // morning motivation
+  console.log('quizManager: startDailyJobs initializing');
   cron.schedule(process.env.CRON_MORNING || '0 8 * * *', async () => {
     try {
       const data = await readData();

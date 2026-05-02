@@ -8,8 +8,16 @@ const TIMEZONE = process.env.CRON_TZ || 'Asia/Kolkata';
 const dailySent = {}; // guildId -> date string to prevent duplicate sends
 let cronsStarted = false; // guard to avoid scheduling twice
 
+// expose global cronJobs container so other modules can stop jobs before scheduling
+global.cronJobs = global.cronJobs || {};
+
 // track per-guild scheduled jobs so we can cancel/reschedule
 const guildDailyJobs = new Map(); // guildId -> cron.Job
+
+// runtime send locks to avoid concurrent duplicate sends
+let isSendingQuiz = false;
+let isSendingQuote = false;
+let isSendingInfo = false;
 
 const QUOTES = [
   "Success is built daily, not suddenly.",
@@ -338,16 +346,26 @@ async function nightTask(client) {
 function startCrons(client) {
   if (cronsStarted) return;
   cronsStarted = true;
+  // helper to replace job safely
+  const replaceJob = (name, job) => {
+    try {
+      if (global.cronJobs[name]) {
+        try { global.cronJobs[name].stop(); } catch (e) {}
+      }
+    } catch (e) {}
+    global.cronJobs[name] = job;
+  };
+
   // morning
-  cron.schedule(process.env.CRON_MORNING || '0 8 * * *', () => morningTask(client), { timezone: TIMEZONE });
+  replaceJob('morning', cron.schedule(process.env.CRON_MORNING || '0 8 * * *', () => morningTask(client), { timezone: TIMEZONE }));
   // quiz
-  cron.schedule(process.env.CRON_QUIZ || '0 12 * * *', () => quizTask(client), { timezone: TIMEZONE });
+  replaceJob('quiz', cron.schedule(process.env.CRON_QUIZ || '0 12 * * *', () => quizTask(client), { timezone: TIMEZONE }));
   // evening
-  cron.schedule(process.env.CRON_EVENING || '0 18 * * *', () => eveningTask(client), { timezone: TIMEZONE });
+  replaceJob('evening', cron.schedule(process.env.CRON_EVENING || '0 18 * * *', () => eveningTask(client), { timezone: TIMEZONE }));
   // night
-  cron.schedule(process.env.CRON_NIGHT || '0 22 * * *', () => nightTask(client), { timezone: TIMEZONE });
+  replaceJob('night', cron.schedule(process.env.CRON_NIGHT || '0 22 * * *', () => nightTask(client), { timezone: TIMEZONE }));
   // per-minute check for guild-specific daily learning time
-  cron.schedule('* * * * *', async () => {
+  replaceJob('minute', cron.schedule('* * * * *', async () => {
     try {
       const data = await readData();
       const now = new Date();
@@ -367,6 +385,7 @@ function startCrons(client) {
           // If we've scheduled a dedicated per-guild job for this guild, let that job handle the announcement
           if (guildDailyJobs.has(guildId)) {
             // per-guild cron will trigger at the same time; skip per-minute dispatcher
+            console.log('Skipping per-minute VC reminder because per-guild job exists for', guildId);
             continue;
           }
           if (last !== todayKey) {
@@ -394,17 +413,26 @@ function startCrons(client) {
           if (!g.lastQuoteDate || g.lastQuoteDate !== todayKey) {
             const ch = g.quoteSchedule.channelId ? await client.channels.fetch(g.quoteSchedule.channelId).catch(() => null) : null;
             if (ch) {
-              const pick = pickRandomAvoidRepeat(QUOTES, g.lastQuoteIndex);
-              const q = pick.item;
+              // runtime lock to prevent duplicate simultaneous sends
+              if (isSendingQuote) {
+                console.log('Quote send skipped due to runtime lock for', guildId);
+              } else {
+                isSendingQuote = true;
+                try {
+                  const pick = pickRandomAvoidRepeat(QUOTES, g.lastQuoteIndex);
+                  const q = pick.item;
               const embed = new EmbedBuilder()
                 .setTitle('💡 Daily Motivation')
                 .setColor(0x0099FF)
                 .setDescription(['💬 **Hey everyone! Hope you\'re doing great 😊**', '', '📌 Stay consistent with your daily learning!', '', '💡 **Today\'s Motivation:**', `"${q}"`, '', '🔥 Keep pushing — you\'re improving!'].join('\n'))
                 .setFooter({ text: 'Stay consistent 🔥' })
                 .setTimestamp();
-              await ch.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } }).catch(() => null);
-              await updateGuild(guildId, { lastQuoteDate: todayKey, lastQuoteIndex: pick.index });
-              console.log('Quote sent to', guildId, g.quoteSchedule.channelId);
+                  await ch.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } }).catch(() => null);
+                  await updateGuild(guildId, { lastQuoteDate: todayKey, lastQuoteIndex: pick.index });
+                  console.log('Quote sent to', guildId, g.quoteSchedule.channelId);
+                } catch (e) { console.error('Quote send error', e); }
+                finally { isSendingQuote = false; }
+              }
             }
           }
         }
@@ -415,17 +443,25 @@ function startCrons(client) {
           if (!g.lastInfoDate || g.lastInfoDate !== todayKey) {
             const ch = g.infoSchedule.channelId ? await client.channels.fetch(g.infoSchedule.channelId).catch(() => null) : null;
             if (ch) {
-              const pick = pickRandomAvoidRepeat(TECH_INFO, g.lastInfoIndex);
-              const info = pick.item;
+              if (isSendingInfo) {
+                console.log('Info send skipped due to runtime lock for', guildId);
+              } else {
+                isSendingInfo = true;
+                try {
+                  const pick = pickRandomAvoidRepeat(TECH_INFO, g.lastInfoIndex);
+                  const info = pick.item;
               const embed = new EmbedBuilder()
                 .setTitle('📢 Daily Learning Tip')
                 .setColor(0x7B61FF)
                 .setDescription(['📢 **Daily Learning Tip**', '', `🧠 Topic: ${info.split(':')[0] || 'General'}`, '', `💡 Tip:\n"${info.replace(/^\w+:\s*/,'')}"`, '', '🚀 Small knowledge daily = big growth!'].join('\n'))
                 .setFooter({ text: 'Keep learning 🚀' })
                 .setTimestamp();
-              await ch.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } }).catch(() => null);
-              await updateGuild(guildId, { lastInfoDate: todayKey, lastInfoIndex: pick.index });
-              console.log('Info sent to', guildId, g.infoSchedule.channelId);
+                  await ch.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } }).catch(() => null);
+                  await updateGuild(guildId, { lastInfoDate: todayKey, lastInfoIndex: pick.index });
+                  console.log('Info sent to', guildId, g.infoSchedule.channelId);
+                } catch (e) { console.error('Info send error', e); }
+                finally { isSendingInfo = false; }
+              }
             }
           }
         }
@@ -433,7 +469,7 @@ function startCrons(client) {
     } catch (e) {
       console.error('Daily learn check failed', e);
     }
-  }, { timezone: TIMEZONE });
+  }, { timezone: TIMEZONE }));
   // schedule per-guild daily jobs saved in data.json
   (async () => {
     try {
@@ -442,7 +478,7 @@ function startCrons(client) {
         const g = data.guilds[guildId];
         if (g && g.dailyLearnTime) {
           try {
-            await scheduleGuildDaily(client, guildId, g.dailyLearnTime, g.vcReminder || null);
+              await scheduleGuildDaily(client, guildId, g.dailyLearnTime, g.vcReminder || null);
           } catch (e) { console.warn('Failed to schedule saved daily for', guildId, e && e.message); }
         }
       }

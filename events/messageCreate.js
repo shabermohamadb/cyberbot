@@ -1,3 +1,4 @@
+console.log('messageCreate listener loaded');
 const { ensureUser, readData, updateUser } = require('../utils/dataStore');
 const { checkAchievements } = require('../utils/achievements');
 const { EmbedBuilder, ChannelType } = require('discord.js');
