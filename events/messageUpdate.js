@@ -14,6 +14,8 @@ module.exports = {
         if (handler && handler.processedMessages && handler.processedMessages.has(newMessage.id)) {
           console.log('messageUpdate: message already processed, skipping', newMessage.id);
         } else if (handler && handler.execute) {
+          // mark as processing to avoid race where both messageUpdate and messageCreate fire
+          try { if (handler && handler.processedMessages) handler.processedMessages.add(newMessage.id); } catch (e) {}
           await handler.execute(newMessage, client);
         }
       }

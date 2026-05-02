@@ -14,10 +14,10 @@ global.cronJobs = global.cronJobs || {};
 // track per-guild scheduled jobs so we can cancel/reschedule
 const guildDailyJobs = new Map(); // guildId -> cron.Job
 
-// runtime send locks to avoid concurrent duplicate sends
-let isSendingQuiz = false;
-let isSendingQuote = false;
-let isSendingInfo = false;
+// runtime send locks to avoid concurrent duplicate sends (use globals so reloads don't reset unexpectedly)
+global.isSendingQuiz = typeof global.isSendingQuiz === 'boolean' ? global.isSendingQuiz : false;
+global.isSendingQuote = typeof global.isSendingQuote === 'boolean' ? global.isSendingQuote : false;
+global.isSendingInfo = typeof global.isSendingInfo === 'boolean' ? global.isSendingInfo : false;
 
 const QUOTES = [
   "Success is built daily, not suddenly.",
@@ -241,8 +241,14 @@ async function morningTask(client) {
         console.log('Morning motivation already sent today for', guildId);
         continue;
       }
-      const pick = pickRandomAvoidRepeat(QUOTES, g.lastQuoteIndex);
-      const q = pick.item;
+      if (global.isSendingQuote) {
+        console.log('Morning motivation skipped due to runtime lock for', guildId);
+        continue;
+      }
+      global.isSendingQuote = true;
+      try {
+        const pick = pickRandomAvoidRepeat(QUOTES, g.lastQuoteIndex);
+        const q = pick.item;
       const embed = new EmbedBuilder()
         .setColor(0x0099FF)
         .setTitle('💡 Daily Motivation')
@@ -261,6 +267,8 @@ async function morningTask(client) {
       await ch.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } }).catch(() => null);
       await updateGuild(guildId, { lastQuoteDate: todayKey, lastQuoteIndex: pick.index });
       console.log('Motivation sent to', guildId);
+      } catch (e) { console.error('Morning motivation error', e); }
+      finally { global.isSendingQuote = false; }
     }
   }
 }
@@ -279,11 +287,19 @@ async function quizTask(client) {
           console.log('Quiz already sent today for', guildId);
           continue;
         }
-        console.log('Cron: sending quiz to', guildId);
-        const active = await startQuiz(ch, client);
-        if (active) {
-          await updateGuild(guildId, { lastQuizDate: todayKey });
+        if (global.isSendingQuiz) {
+          console.log('Quiz send skipped due to runtime lock for', guildId);
+          continue;
         }
+        global.isSendingQuiz = true;
+        try {
+          console.log('Cron: sending quiz to', guildId);
+          const active = await startQuiz(ch, client);
+          if (active) {
+            await updateGuild(guildId, { lastQuizDate: todayKey });
+          }
+        } catch (e) { console.error('Quiz send failed', e); }
+        finally { global.isSendingQuiz = false; }
       } catch (e) { console.error('Quiz send failed', e); }
     }
   }
@@ -414,10 +430,10 @@ function startCrons(client) {
             const ch = g.quoteSchedule.channelId ? await client.channels.fetch(g.quoteSchedule.channelId).catch(() => null) : null;
             if (ch) {
               // runtime lock to prevent duplicate simultaneous sends
-              if (isSendingQuote) {
+              if (global.isSendingQuote) {
                 console.log('Quote send skipped due to runtime lock for', guildId);
               } else {
-                isSendingQuote = true;
+                global.isSendingQuote = true;
                 try {
                   const pick = pickRandomAvoidRepeat(QUOTES, g.lastQuoteIndex);
                   const q = pick.item;
@@ -431,7 +447,7 @@ function startCrons(client) {
                   await updateGuild(guildId, { lastQuoteDate: todayKey, lastQuoteIndex: pick.index });
                   console.log('Quote sent to', guildId, g.quoteSchedule.channelId);
                 } catch (e) { console.error('Quote send error', e); }
-                finally { isSendingQuote = false; }
+                finally { global.isSendingQuote = false; }
               }
             }
           }
@@ -443,24 +459,24 @@ function startCrons(client) {
           if (!g.lastInfoDate || g.lastInfoDate !== todayKey) {
             const ch = g.infoSchedule.channelId ? await client.channels.fetch(g.infoSchedule.channelId).catch(() => null) : null;
             if (ch) {
-              if (isSendingInfo) {
+              if (global.isSendingInfo) {
                 console.log('Info send skipped due to runtime lock for', guildId);
               } else {
-                isSendingInfo = true;
+                global.isSendingInfo = true;
                 try {
                   const pick = pickRandomAvoidRepeat(TECH_INFO, g.lastInfoIndex);
                   const info = pick.item;
-              const embed = new EmbedBuilder()
-                .setTitle('📢 Daily Learning Tip')
-                .setColor(0x7B61FF)
-                .setDescription(['📢 **Daily Learning Tip**', '', `🧠 Topic: ${info.split(':')[0] || 'General'}`, '', `💡 Tip:\n"${info.replace(/^\w+:\s*/,'')}"`, '', '🚀 Small knowledge daily = big growth!'].join('\n'))
-                .setFooter({ text: 'Keep learning 🚀' })
-                .setTimestamp();
+                  const embed = new EmbedBuilder()
+                    .setTitle('📢 Daily Learning Tip')
+                    .setColor(0x7B61FF)
+                    .setDescription([`🧠 Topic: ${info.split(':')[0] || 'General'}`, '', `💡 Tip:\n"${info.replace(/^\w+:\s*/,'')}"`, '', '🚀 Small knowledge daily = big growth!'].join('\n'))
+                    .setFooter({ text: 'Keep learning 🚀' })
+                    .setTimestamp();
                   await ch.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } }).catch(() => null);
                   await updateGuild(guildId, { lastInfoDate: todayKey, lastInfoIndex: pick.index });
                   console.log('Info sent to', guildId, g.infoSchedule.channelId);
                 } catch (e) { console.error('Info send error', e); }
-                finally { isSendingInfo = false; }
+                finally { global.isSendingInfo = false; }
               }
             }
           }

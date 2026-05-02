@@ -1,4 +1,11 @@
-console.log('messageCreate listener loaded');
+// Prevent multiple registrations if the module is required more than once
+if (global.messageListenerLoaded) {
+	console.log('messageCreate module already loaded, exporting no-op to avoid duplicate listeners');
+	module.exports = { name: 'messageCreate', execute: async () => {} };
+} else {
+	global.messageListenerLoaded = true;
+	console.log('messageCreate listener loaded');
+}
 const { ensureUser, readData, updateUser } = require('../utils/dataStore');
 const { checkAchievements } = require('../utils/achievements');
 const { EmbedBuilder, ChannelType } = require('discord.js');

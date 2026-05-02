@@ -112,7 +112,7 @@ module.exports = {
       const embed = new EmbedBuilder()
         .setTitle('📢 Daily Learning Tip')
         .setColor(0x7B61FF)
-        .setDescription(['📢 **Daily Learning Tip**', '', `🧠 Topic: ${info.split(':')[0] || 'General'}`, '', `💡 Tip:\n"${info.replace(/^\\w+:\\s*/,'')}"`, '', '🚀 Small knowledge daily = big growth!'].join('\n'))
+        .setDescription([`🧠 Topic: ${info.split(':')[0] || 'General'}`, '', `💡 Tip:\n"${info.replace(/^\\w+:\\s*/,'')}"`, '', '🚀 Small knowledge daily = big growth!'].join('\n'))
         .setFooter({ text: 'Keep learning 🚀' })
         .setTimestamp();
       await target.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } }).catch(() => null);
