@@ -13,10 +13,14 @@ module.exports = {
 			return;
 		}
 
+		// Mark message as processing immediately to prevent races with messageUpdate
+		try { processedMessages.add(message.id); } catch (e) {}
+
 		// Skip messages that were created before the bot finished booting to avoid replay duplicates
 		try {
 			if (client && client.bootTime && message.createdTimestamp && message.createdTimestamp < (client.bootTime - 5000)) {
 				console.log('messageCreate: skipping old message created before boot', message.id, new Date(message.createdTimestamp).toISOString());
+				try { processedMessages.delete(message.id); } catch (e) {}
 				return;
 			}
 		} catch (e) {}
@@ -74,7 +78,8 @@ module.exports = {
 						.setTimestamp();
 					await message.reply({ embeds: [warn], allowedMentions: { repliedUser: false } });
 				} catch (e) { console.warn('Failed to reply asking for screenshot', e && e.message); }
-				return;
+					try { processedMessages.delete(message.id); } catch (e) {}
+					return;
 			}
 
 			console.log('Attachment detected, processing progress for', message.author.id);
@@ -123,12 +128,10 @@ module.exports = {
 				await message.reply({ embeds: [embed], allowedMentions: { repliedUser: false } });
 			} catch (e) { console.warn('Reply failed', e.message); }
 
-			// mark processed to avoid duplicate handling on edits
-		try {
-			processedMessages.add(message.id);
-			// Remove processed marker after 10 minutes to avoid memory growth
-			setTimeout(() => { try { processedMessages.delete(message.id); } catch (e) {} }, 10 * 60 * 1000);
-		} catch (e) {}
+			// keep processed marker; remove after 10 minutes to avoid memory growth
+			try {
+				setTimeout(() => { try { processedMessages.delete(message.id); } catch (e) {} }, 10 * 60 * 1000);
+			} catch (e) {}
 
 			// Achievement check (non-blocking)
 			try { const newly = await checkAchievements(message.author.id); if (newly && newly.length) console.log('Achievements:', newly.map(a=>a.name)); } catch (e) {}
