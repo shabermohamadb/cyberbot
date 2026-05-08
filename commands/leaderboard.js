@@ -17,10 +17,10 @@ module.exports = {
     });
 
     const embed = new EmbedBuilder()
-      .setTitle('🏆 Leaderboard')
+      .setTitle('🏆 TOP LEARNERS')
       .setDescription(lines.join('\n') || 'No users yet')
       .setColor(0xFFD700)
-      .setFooter({ text: 'Keep grinding 🔥' })
+      .setFooter({ text: '⚡ Zenith Learning System' })
       .setTimestamp();
 
     await interaction.editReply({ embeds: [embed] });

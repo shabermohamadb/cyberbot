@@ -127,11 +127,11 @@ module.exports = {
 			try { await message.react('✅'); } catch (e) { console.warn('React failed', e.message); }
 			try {
 				const embed = new EmbedBuilder()
-					.setTitle('📸 Progress Recorded')
-					.setDescription(`+${progressGain} Points Added\n🔥 Streak: ${streak} days\n💰 Total Points: ${newProgress}`)
-					.setColor(0x00AE86)
+					.setTitle('📸 PROGRESS VERIFIED')
+					.setDescription([`✅ XP Added: \`+${progressGain}\``, `🔥 Streak: \`${streak} Days\``, `💰 Total XP: \`${newProgress}\``].join('\n'))
+					.setColor(0x00ff99)
 					.setTimestamp()
-					.setFooter({ text: 'Keep posting screenshots to maintain your streak' });
+					.setFooter({ text: '⚡ Zenith Learning System' });
 				await message.reply({ embeds: [embed], allowedMentions: { repliedUser: false } });
 			} catch (e) { console.warn('Reply failed', e.message); }
 

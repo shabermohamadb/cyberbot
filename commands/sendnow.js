@@ -29,11 +29,16 @@ module.exports = {
           "Today +1% better than yesterday. Keep going.",
           "Progress is progress — celebrate small wins."
         ];
-        const q = QUOTES[Math.floor(Math.random() * QUOTES.length)];
-        const embed = { title: '💬 Daily Motivation', description: `${q}`, footer: { text: 'Stay consistent 🔥' }, timestamp: new Date() };
-        await ch.send({ embeds: [embed] });
-        await require('../utils/dataStore').updateGuild(interaction.guild.id, { lastQuoteDate: new Date().toISOString().slice(0,10) });
-        return interaction.editReply({ embeds: [new (require('discord.js').EmbedBuilder)().setColor(0x0099FF).setDescription('Motivation sent.')] });
+          const q = QUOTES[Math.floor(Math.random() * QUOTES.length)];
+          const embed = new (require('discord.js').EmbedBuilder)()
+            .setTitle('⚡ DAILY MOTIVATION')
+            .setColor(0x00d9ff)
+            .setDescription([`> ${q}`, '', '🔥 Stay disciplined.', '📚 Learn daily.', '🚀 Grow continuously.'].join('\n'))
+            .setFooter({ text: '⚡ Zenith Learning System' })
+            .setTimestamp();
+          await ch.send({ embeds: [embed] }).catch(() => null);
+          await require('../utils/dataStore').updateGuild(interaction.guild.id, { lastQuoteDate: new Date().toISOString().slice(0,10) });
+          return interaction.editReply({ embeds: [new (require('discord.js').EmbedBuilder)().setColor(0x00d9ff).setDescription('Motivation sent.')] });
       }
       if (type === 'info') {
         const chId = g.infoSchedule && g.infoSchedule.channelId;
@@ -173,10 +178,17 @@ module.exports = {
           "Scrum is a popular Agile framework."
         ];
         const info = TECH_INFO[Math.floor(Math.random() * TECH_INFO.length)];
-        const embed = { title: '💡 Daily Tech Info', description: `${info}`, footer: { text: 'Useful for students — learn daily' }, timestamp: new Date() };
-        await ch.send({ embeds: [embed] });
+        const topic = (info.split(':')[0] || 'General').trim();
+        const tip = info.replace(/^\s*[^:]+:\s*/, '').trim();
+        const embed = new (require('discord.js').EmbedBuilder)()
+          .setTitle('📢 DAILY TECH INSIGHT')
+          .setColor(0x00d9ff)
+          .setDescription([`🧠 Topic:\n\`${topic}\``, '', `💡 Insight:\n> ${tip}`, '', '🚀 Small knowledge daily = huge growth.'].join('\n'))
+          .setFooter({ text: '⚡ Zenith Learning System' })
+          .setTimestamp();
+        await ch.send({ embeds: [embed] }).catch(() => null);
         await require('../utils/dataStore').updateGuild(interaction.guild.id, { lastInfoDate: new Date().toISOString().slice(0,10) });
-        return interaction.editReply({ embeds: [new (require('discord.js').EmbedBuilder)().setColor(0x0099FF).setDescription('Information sent.')] });
+        return interaction.editReply({ embeds: [new (require('discord.js').EmbedBuilder)().setColor(0x00d9ff).setDescription('Information sent.')] });
       }
       if (type === 'learn') {
         const announceId = g.vcReminder && g.vcReminder.announceChannelId ? g.vcReminder.announceChannelId : null;
@@ -185,14 +197,14 @@ module.exports = {
         const ch = await interaction.client.channels.fetch(targetChId).catch(() => null);
         if (!ch) return interaction.editReply('Cannot fetch target channel.');
         const vcMention = g.vcReminder && g.vcReminder.channelId ? `<#${g.vcReminder.channelId}>` : '';
-        const embed = {
-          title: '🔥 DAILY LEARNING TIME!',
-          description: `⏳ Time: ${g.dailyLearnTime || 'now'}\nJoin VC: ${vcMention}\nDuration: 10 Minutes\n\n💡 "Just 10 minutes daily can change your future."`,
-          footer: { text: 'Let\'s grow together!' },
-          timestamp: new Date()
-        };
+        const embed = new (require('discord.js').EmbedBuilder)()
+          .setTitle('🔥 DAILY LEARNING TIME!')
+          .setColor(0x00d9ff)
+          .setDescription([`⏳ Time: ${g.dailyLearnTime || 'now'}`, `Join VC: ${vcMention}`, 'Duration: 10 minutes', '', '💡 Just 10 minutes daily can change your future.'].join('\n'))
+          .setFooter({ text: '⚡ Zenith Learning System' })
+          .setTimestamp();
         await ch.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } }).catch(() => null);
-        return interaction.editReply({ embeds: [new (require('discord.js').EmbedBuilder)().setColor(0x0099FF).setDescription('Daily learning announcement sent.')] });
+        return interaction.editReply({ embeds: [new (require('discord.js').EmbedBuilder)().setColor(0x00d9ff).setDescription('Daily learning announcement sent.')] });
       }
       return interaction.editReply('Unknown type. Use quote|info|learn');
     } catch (e) {

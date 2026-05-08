@@ -39,9 +39,9 @@ module.exports = {
       const todayKey = new Date().toISOString().slice(0,10);
       const embed = new EmbedBuilder()
         .setTitle('💡 Daily Motivation')
-        .setColor(0x0099FF)
-        .setDescription(['💬 **Hey everyone! Hope you\'re doing great 😊**', '', '📌 Stay consistent with your daily learning!', '', '💡 **Today\'s Motivation:**', `"${q}"`, '', '🔥 Keep pushing — you\'re improving!'].join('\n'))
-        .setFooter({ text: 'Stay consistent 🔥' })
+        .setColor(0x3498db)
+        .setDescription(['Stay consistent with your learning.', '', `"${q}"`, '', '🔥 Small progress every day matters.'].join('\n'))
+        .setFooter({ text: 'Keep learning' })
         .setTimestamp();
       await target.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } }).catch(() => null);
       await updateGuild(interaction.guild.id, { lastQuoteDate: todayKey, lastQuoteIndex: idx });
@@ -55,7 +55,7 @@ module.exports = {
     const embed = new EmbedBuilder()
       .setTitle('✅ Quote Scheduled')
       .setDescription(`Daily motivation set at **${time}** in <#${channel.id}>`)
-      .setColor(0x0099FF)
+      .setColor(0x3498db)
       .setTimestamp();
 
     try { await interaction.editReply({ embeds: [embed] }); } catch (e) { await interaction.followUp({ content: 'Scheduled.', ephemeral: true }); }

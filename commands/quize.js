@@ -44,10 +44,11 @@ module.exports = {
       const member = interaction.member;
       if (member && (member.permissions.has(PermissionsBitField.Flags.Administrator) || member.permissions.has(PermissionsBitField.Flags.ManageGuild))) {
         const announce = new EmbedBuilder()
-          .setColor(0x0099FF)
-          .setDescription(`💬 **Quiz is live!**\nYou have ⏳ ${seconds}s to answer.`)
-          .setTimestamp();
-        await targetChannel.send({ content: '@everyone', embeds: [announce], allowedMentions: { parse: ['everyone'] } });
+          .setColor(0x9b59b6)
+          .setDescription([`⏳ Time Limit: \`${seconds} Seconds\``, '', '❓ Question incoming — join fast!'].join('\n'))
+          .setTimestamp()
+          .setFooter({ text: '⚡ Zenith Learning System' });
+        await targetChannel.send({ embeds: [announce], allowedMentions: { parse: [] } });
       }
     } catch (e) { console.warn('Failed to send mention', e.message); }
 
@@ -58,10 +59,11 @@ module.exports = {
     }
 
     const embed = new EmbedBuilder()
-      .setTitle('🧠 Daily Quiz')
-      .setDescription(`⏳ Time: ${seconds}s\nAnswer quickly to earn more XP`)
-      .setColor(0x0099FF)
-      .setTimestamp();
+      .setTitle('🧠 CYBER QUIZ ACTIVE')
+      .setColor(0x9b59b6)
+      .setDescription([`⏳ Time Limit: \`${seconds} Seconds\``, '', '❓ Question: Answer fast for bonus XP.'].join('\n'))
+      .setTimestamp()
+      .setFooter({ text: '⚡ Zenith Learning System' });
 
     await interaction.editReply({ embeds: [embed] });
   }

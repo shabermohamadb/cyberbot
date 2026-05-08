@@ -22,7 +22,7 @@ const client = new Client({
 
 // Global send dedupe: prevent accidental duplicate sends across the bot
 global.SEND_CACHE = global.SEND_CACHE || new Map();
-const { TextChannel, DMChannel, ThreadChannel, NewsChannel } = require('discord.js');
+const { TextChannel, DMChannel, ThreadChannel, NewsChannel, Message } = require('discord.js');
 const wrapSend = (klass) => {
   if (!klass || !klass.prototype) return;
   if (klass.prototype.__send_wrapped) return;
@@ -51,6 +51,32 @@ wrapSend(TextChannel);
 wrapSend(DMChannel);
 wrapSend(ThreadChannel);
 wrapSend(NewsChannel);
+
+// also wrap Message.reply to avoid duplicate replies
+try {
+  if (Message && Message.prototype && !Message.prototype.__reply_wrapped) {
+    const origReply = Message.prototype.reply;
+    Message.prototype.reply = async function(...args) {
+      try {
+        const channelId = this.channel && (this.channel.id || 'unknown');
+        let key;
+        try { key = 'reply|' + (this.id || '') + '|' + JSON.stringify(args[0]); } catch (e) { key = 'reply|' + (this.id || '') + '|' + String(Date.now()); }
+        const now = Date.now();
+        const prev = global.SEND_CACHE.get(key);
+        if (prev && now - prev < 2000) {
+          console.log('Skipped duplicate reply for', this.id);
+          return null;
+        }
+        global.SEND_CACHE.set(key, now);
+        setTimeout(() => global.SEND_CACHE.delete(key), 3000);
+        return await origReply.apply(this, args);
+      } catch (e) {
+        return origReply.apply(this, args);
+      }
+    };
+    Message.prototype.__reply_wrapped = true;
+  }
+} catch (e) {}
 
 client.commands = new Collection();
 const commandsPath = path.join(__dirname, 'commands');

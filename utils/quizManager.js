@@ -134,20 +134,23 @@ function difficultyBonus(difficulty) {
 }
 
 function formatQuestionEmbed(q, timeLeft) {
-  // Clean daily-quiz UI using allowed emojis and Info color
-  const descParts = [];
-  if (typeof timeLeft === 'number') descParts.push(`⏳ Time: ${timeLeft}s`);
-  descParts.push('Answer quickly to earn more XP');
-  descParts.push('');
-  descParts.push(q.question);
+  // Modern clean quiz UI
+  const parts = [];
+  if (typeof timeLeft === 'number') parts.push(`⏳ Time Limit: \`${timeLeft} Seconds\``);
+  parts.push('');
+  parts.push('❓ Question:');
+  parts.push('');
+  parts.push(`> ${q.question}`);
+  parts.push('');
+  parts.push('🎯 Answer fast for bonus XP.');
 
   const embed = new EmbedBuilder()
-    .setTitle('🧠 Daily Quiz')
-    .setDescription(descParts.join('\n'))
-    .setColor(0x0099FF)
+    .setTitle('🧠 CYBER QUIZ ACTIVE')
+    .setDescription(parts.join('\n'))
+    .setColor(0x9b59b6)
     .addFields({ name: 'Difficulty', value: (q.difficulty || 'medium').toString(), inline: true });
 
-  embed.setFooter({ text: 'Choose the correct answer below' });
+  embed.setFooter({ text: '⚡ Zenith Learning System' });
   if (typeof timeLeft === 'number') embed.setTimestamp();
   return embed;
 }
@@ -231,11 +234,12 @@ async function startQuiz(channel, client, seconds = parseInt(process.env.QUIZ_TI
     winners.sort((a, b) => a.time - b.time);
 
       const resultEmbed = new EmbedBuilder()
-        .setTitle('🧠 Quiz Results')
-        .setColor(0x00AE86)
+        .setTitle('🧠 CYBER QUIZ RESULTS')
+        .setColor(0x9b59b6)
         .addFields({ name: 'Question', value: q.question })
         .addFields({ name: 'Correct Answer', value: options[correctIndex] })
         .setDescription('Well played — winners earn speed + difficulty bonuses.')
+        .setFooter({ text: '⚡ Zenith Learning System' })
         .setTimestamp();
 
     if (winners.length === 0) {

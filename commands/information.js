@@ -109,15 +109,17 @@ module.exports = {
       if (INFO.length > 1 && idx === lastIndex) idx = (idx + 1) % INFO.length;
       const info = INFO[idx];
       const todayKey = new Date().toISOString().slice(0,10);
+      const topic = (info.split(':')[0] || 'General').trim();
+      const tip = info.replace(/^\s*[^:]+:\s*/, '').trim();
       const embed = new EmbedBuilder()
-        .setTitle('📢 Daily Learning Tip')
-        .setColor(0x7B61FF)
-        .setDescription([`🧠 Topic: ${info.split(':')[0] || 'General'}`, '', `💡 Tip:\n"${info.replace(/^\\w+:\\s*/,'')}"`, '', '🚀 Small knowledge daily = big growth!'].join('\n'))
-        .setFooter({ text: 'Keep learning 🚀' })
+        .setTitle('📢 DAILY TECH INSIGHT')
+        .setColor(0x00d9ff)
+        .setDescription([`🧠 Topic:\n\`${topic}\``, '', `💡 Insight:\n> ${tip}`, '', '🚀 Small knowledge daily = huge growth.'].join('\n'))
+        .setFooter({ text: '⚡ Zenith Learning System' })
         .setTimestamp();
-      await target.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } }).catch(() => null);
+      await target.send({ embeds: [embed], allowedMentions: { parse: [] } }).catch(() => null);
       await updateGuild(interaction.guild.id, { lastInfoDate: todayKey, lastInfoIndex: idx });
-      return interaction.editReply({ embeds: [new EmbedBuilder().setColor(0x7B61FF).setDescription('Information sent.')] });
+      return interaction.editReply({ embeds: [new EmbedBuilder().setColor(0x00d9ff).setDescription('Information sent.')] });
     }
 
     if (!time || !channel) return interaction.editReply('To schedule info, provide both `time` and `channel`.');

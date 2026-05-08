@@ -250,19 +250,10 @@ async function morningTask(client) {
         const pick = pickRandomAvoidRepeat(QUOTES, g.lastQuoteIndex);
         const q = pick.item;
       const embed = new EmbedBuilder()
-        .setColor(0x0099FF)
         .setTitle('💡 Daily Motivation')
-        .setDescription([
-          '💬 **Hey everyone! Hope you\'re doing great 😊**',
-          '',
-          '📌 Stay consistent with your daily learning!',
-          '',
-          '💡 **Today\'s Motivation:**',
-          `"${q}"`,
-          '',
-          '🔥 Keep pushing — you\'re improving!'
-        ].join('\n'))
-        .setFooter({ text: 'Stay consistent 🔥' })
+        .setColor(0x3498db)
+        .setDescription(['Stay consistent with your learning.', '', `"${q}"`, '', '🔥 Small progress every day matters.'].join('\n'))
+        .setFooter({ text: 'Keep learning' })
         .setTimestamp();
       await ch.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } }).catch(() => null);
       await updateGuild(guildId, { lastQuoteDate: todayKey, lastQuoteIndex: pick.index });
@@ -349,11 +340,11 @@ async function nightTask(client) {
           return `${i + 1}. <@${u.id}> — ${u.progressPoints} pts`;
         }).join('\n') || 'No users yet.';
         const embed = new EmbedBuilder()
-          .setTitle('🏆 Nightly Leaderboard')
+          .setTitle('🏆 TOP LEARNERS')
           .setDescription(top)
           .setColor(0xFFD700)
           .setTimestamp()
-          .setFooter({ text: 'Keep grinding 🔥' });
+          .setFooter({ text: '⚡ Zenith Learning System' });
         await ch.send({ embeds: [embed] }).catch(() => null);
     }
   }
@@ -415,9 +406,9 @@ function startCrons(client) {
             const vcMention = g.vcReminder && g.vcReminder.channelId ? `<#${g.vcReminder.channelId}>` : '';
             if (ch) {
               const embed = {
-                title: '🔥 DAILY LEARNING TIME! ',
-                description: `⏰ Time: ${g.dailyLearnTime}\n🎧 Join VC: ${vcMention}\n📚 Duration: 10 Minutes\n\n💡 "Just 10 minutes daily can change your future."`,
-                footer: { text: 'Let\'s grow together!' },
+                title: '🔥 DAILY LEARNING TIME!',
+                description: `⏰ Time: ${g.dailyLearnTime}\n🎧 Join VC: ${vcMention}\n📚 Duration: 10 minutes\n\n💡 Just 10 minutes daily can change your future.`,
+                footer: { text: "Let's grow together!" },
                 timestamp: new Date()
               };
               await ch.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } }).catch(() => null);
@@ -442,9 +433,9 @@ function startCrons(client) {
                   const q = pick.item;
               const embed = new EmbedBuilder()
                 .setTitle('💡 Daily Motivation')
-                .setColor(0x0099FF)
-                .setDescription(['💬 **Hey everyone! Hope you\'re doing great 😊**', '', '📌 Stay consistent with your daily learning!', '', '💡 **Today\'s Motivation:**', `"${q}"`, '', '🔥 Keep pushing — you\'re improving!'].join('\n'))
-                .setFooter({ text: 'Stay consistent 🔥' })
+                .setColor(0x3498db)
+                .setDescription(['Stay consistent with your learning.', '', `"${q}"`, '', '🔥 Small progress every day matters.'].join('\n'))
+                .setFooter({ text: 'Keep learning' })
                 .setTimestamp();
                   await ch.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } }).catch(() => null);
                   await updateGuild(guildId, { lastQuoteDate: todayKey, lastQuoteIndex: pick.index });
