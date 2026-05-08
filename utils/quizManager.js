@@ -157,9 +157,21 @@ function formatQuestionEmbed(q, timeLeft) {
 
 // startQuiz: sends a quiz to a channel, handles collection, scoring, and awarding XP
 async function startQuiz(channel, client, seconds = parseInt(process.env.QUIZ_TIME_SECONDS || '30')) {
+  // prevent concurrent starts: set a short-lived lock immediately
   if (activeQuiz) return null; // only one active quiz globally
-  const qRaw = await getQuestion();
-  if (!qRaw) return null;
+  // reserve the activeQuiz slot early to avoid race where two calls start simultaneously
+  activeQuiz = { locking: true, guildId: channel.guildId, startedAt: Date.now() };
+  let qRaw;
+  try {
+    qRaw = await getQuestion();
+    if (!qRaw) {
+      activeQuiz = null;
+      return null;
+    }
+  } catch (e) {
+    activeQuiz = null;
+    throw e;
+  }
 
   // normalize question structure
   const q = {
@@ -179,7 +191,14 @@ async function startQuiz(channel, client, seconds = parseInt(process.env.QUIZ_TI
   }
 
   // Post the quiz embed (mass-style spacing handled by embed description)
-  const msg = await channel.send({ embeds: [embed], components: [row] });
+  let msg;
+  try {
+    msg = await channel.send({ embeds: [embed], components: [row] });
+  } catch (e) {
+    // clear lock on failure to send
+    activeQuiz = null;
+    throw e;
+  }
 
   // countdown
   let timeLeft = seconds;
@@ -263,6 +282,7 @@ async function startQuiz(channel, client, seconds = parseInt(process.env.QUIZ_TI
     activeQuiz = null;
   });
 
+  // replace lock with full active quiz object
   activeQuiz = { question: q, message: msg, startedAt: Date.now(), responses, seconds };
   return activeQuiz;
 }
