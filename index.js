@@ -23,6 +23,28 @@ const client = new Client({
 // Global send dedupe: prevent accidental duplicate sends across the bot
 global.SEND_CACHE = global.SEND_CACHE || new Map();
 const { TextChannel, DMChannel, ThreadChannel, NewsChannel, Message } = require('discord.js');
+// Normalize send/reply args into a stable string to key dedupe cache
+function makeDedupeKey(prefix, arg) {
+  try {
+    if (typeof arg === 'string') return `${prefix}|${arg}`;
+    if (!arg) return `${prefix}|<no-args>`;
+    if (typeof arg === 'object') {
+      if (arg.content) return `${prefix}|${String(arg.content)}`;
+      if (arg.embeds && arg.embeds.length) {
+        const eb = Array.isArray(arg.embeds) ? arg.embeds[0] : arg.embeds;
+        try {
+          if (eb && typeof eb.toJSON === 'function') return `${prefix}|${JSON.stringify(eb.toJSON())}`;
+          return `${prefix}|${JSON.stringify(eb)}`;
+        } catch (e) { /* fallthrough */ }
+      }
+      if (arg.files) return `${prefix}|files`;
+      try { return `${prefix}|${JSON.stringify(arg)}`; } catch (e) { return `${prefix}|<obj>`; }
+    }
+    return `${prefix}|${String(arg)}`;
+  } catch (e) {
+    return `${prefix}|<err>`;
+  }
+}
 const wrapSend = (klass) => {
   if (!klass || !klass.prototype) return;
   if (klass.prototype.__send_wrapped) return;
@@ -30,12 +52,12 @@ const wrapSend = (klass) => {
   klass.prototype.send = async function(...args) {
     try {
       const channelId = this.id || 'unknown';
-      let key;
-      try { key = channelId + '|' + JSON.stringify(args[0]); } catch (e) { key = channelId + '|' + String(Date.now()); }
+      // create a stable key for deduping
+      let key = makeDedupeKey(channelId, args[0]);
       const now = Date.now();
       const prev = global.SEND_CACHE.get(key);
       if (prev && now - prev < 2000) {
-        console.log('Skipped duplicate send to', channelId);
+        console.log('Skipped duplicate send to', channelId, 'key=', key);
         return null;
       }
       global.SEND_CACHE.set(key, now);
@@ -59,12 +81,11 @@ try {
     Message.prototype.reply = async function(...args) {
       try {
         const channelId = this.channel && (this.channel.id || 'unknown');
-        let key;
-        try { key = 'reply|' + (this.id || '') + '|' + JSON.stringify(args[0]); } catch (e) { key = 'reply|' + (this.id || '') + '|' + String(Date.now()); }
+        const key = makeDedupeKey('reply|' + (this.id || ''), args[0]);
         const now = Date.now();
         const prev = global.SEND_CACHE.get(key);
         if (prev && now - prev < 2000) {
-          console.log('Skipped duplicate reply for', this.id);
+          console.log('Skipped duplicate reply for', this.id, 'channel=', channelId, 'key=', key);
           return null;
         }
         global.SEND_CACHE.set(key, now);
