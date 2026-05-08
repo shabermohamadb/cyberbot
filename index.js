@@ -7,6 +7,7 @@ if (global.BOT_RUNNING) {
 global.BOT_RUNNING = true;
 // PID lock file to avoid multiple node processes running the bot (helps prevent duplicate cron sends)
 const fs = require('fs');
+const path = require('path');
 const PID_LOCK = path.join(__dirname, '.bot.pid');
 try {
   try {
@@ -38,8 +39,6 @@ try {
   process.on('SIGINT', () => { cleanup(); process.exit(0); });
   process.on('SIGTERM', () => { cleanup(); process.exit(0); });
 } catch (e) { console.warn('PID lock handling failed', e && e.message); }
-const fs = require('fs');
-const path = require('path');
 const { Client, Collection, GatewayIntentBits, Partials } = require('discord.js');
 const cron = require('node-cron');
 
