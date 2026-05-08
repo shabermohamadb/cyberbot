@@ -7,6 +7,7 @@ const processedInteractions = new Set();
 module.exports = {
   name: 'interactionCreate',
   async execute(interaction, client) {
+    console.log('interactionCreate triggered once');
     // guard: skip duplicate interaction deliveries (Discord can occasionally deliver twice)
     try {
       if (processedInteractions.has(interaction.id)) return;

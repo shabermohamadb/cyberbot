@@ -14,6 +14,7 @@ const processedMessages = new Set();
 module.exports = {
 	name: 'messageCreate',
 	async execute(message, client) {
+			console.log('messageCreate triggered once');
 		// Avoid re-processing the same message (guard against duplicate handling)
 		if (processedMessages.has(message.id)) {
 			console.log('messageCreate: already processed message', message.id);

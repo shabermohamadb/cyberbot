@@ -1,6 +1,6 @@
 require('dotenv').config();
 const cron = require('node-cron');
-const { readData, updateUser, updateGuild } = require('./dataStore');
+const { readData, updateUser, updateGuild, claimGuildKeyForDate, finalizeGuildDate, clearGuildProcessing } = require('./dataStore');
 const { startQuiz } = require('./quizManager');
 const { EmbedBuilder } = require('discord.js');
 
@@ -229,36 +229,42 @@ function pickRandomAvoidRepeat(arr, lastIndex) {
 
 async function morningTask(client) {
   console.log('Cron: morning task running');
+  console.log('cron executed once (morningTask)');
   const data = await readData();
   for (const guildId of Object.keys(data.guilds || {})) {
     const g = data.guilds[guildId];
     if (!g || !g.progressChannel) continue;
     const ch = await client.channels.fetch(g.progressChannel).catch(() => null);
-    if (ch) {
+      if (ch) {
       const todayKey = new Date().toISOString().slice(0,10);
-      // check guild-stored lastQuoteDate to avoid duplicates across restarts
-      if (g.lastQuoteDate && g.lastQuoteDate === todayKey) {
-        console.log('Morning motivation already sent today for', guildId);
+      // Atomically claim the guild's quote slot to avoid cross-process duplicates
+      let claimed = false;
+      try {
+        claimed = await claimGuildKeyForDate(guildId, 'lastQuoteDate', todayKey);
+      } catch (e) { console.error('Claiming guild quote slot failed', e); claimed = false; }
+      if (!claimed) {
+        console.log('Morning motivation already sent or claimed for', guildId);
         continue;
       }
       if (global.isSendingQuote) {
         console.log('Morning motivation skipped due to runtime lock for', guildId);
+        await clearGuildProcessing(guildId, 'lastQuoteDate');
         continue;
       }
       global.isSendingQuote = true;
       try {
         const pick = pickRandomAvoidRepeat(QUOTES, g.lastQuoteIndex);
         const q = pick.item;
-      const embed = new EmbedBuilder()
-        .setTitle('💡 Daily Motivation')
-        .setColor(0x3498db)
-        .setDescription(['Stay consistent with your learning.', '', `"${q}"`, '', '🔥 Small progress every day matters.'].join('\n'))
-        .setFooter({ text: 'Keep learning' })
-        .setTimestamp();
-      await ch.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } }).catch(() => null);
-      await updateGuild(guildId, { lastQuoteDate: todayKey, lastQuoteIndex: pick.index });
-      console.log('Motivation sent to', guildId);
-      } catch (e) { console.error('Morning motivation error', e); }
+        const embed = new EmbedBuilder()
+          .setTitle('💡 Daily Motivation')
+          .setColor(0x3498db)
+          .setDescription(['Stay consistent with your learning.', '', `"${q}"`, '', '🔥 Small progress every day matters.'].join('\n'))
+          .setFooter({ text: 'Keep learning' })
+          .setTimestamp();
+        await ch.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } }).catch(() => { throw new Error('send failed'); });
+        await finalizeGuildDate(guildId, 'lastQuoteDate', todayKey, { lastQuoteIndex: pick.index });
+        console.log('Motivation sent to', guildId);
+      } catch (e) { console.error('Morning motivation error', e); await clearGuildProcessing(guildId, 'lastQuoteDate'); }
       finally { global.isSendingQuote = false; }
     }
   }
@@ -266,6 +272,7 @@ async function morningTask(client) {
 
 async function quizTask(client) {
   console.log('Cron: quiz task running');
+  console.log('cron executed once (quizTask)');
   const data = await readData();
   for (const guildId of Object.keys(data.guilds || {})) {
     const g = data.guilds[guildId];
@@ -284,12 +291,18 @@ async function quizTask(client) {
         }
         global.isSendingQuiz = true;
         try {
+          // claim slot to avoid cross-process duplicates
+          const claimed = await claimGuildKeyForDate(guildId, 'lastQuizDate', todayKey);
+          if (!claimed) { console.log('Quiz already sent or claimed for', guildId); continue; }
           console.log('Cron: sending quiz to', guildId);
           const active = await startQuiz(ch, client);
           if (active) {
-            await updateGuild(guildId, { lastQuizDate: todayKey });
+            await finalizeGuildDate(guildId, 'lastQuizDate', todayKey);
+          } else {
+            // clear processing marker so another process can attempt later
+            await clearGuildProcessing(guildId, 'lastQuizDate');
           }
-        } catch (e) { console.error('Quiz send failed', e); }
+        } catch (e) { console.error('Quiz send failed', e); await clearGuildProcessing(guildId, 'lastQuizDate'); }
         finally { global.isSendingQuiz = false; }
       } catch (e) { console.error('Quiz send failed', e); }
     }
@@ -298,23 +311,39 @@ async function quizTask(client) {
 
 async function eveningTask(client) {
   console.log('Cron: evening task running');
+  console.log('cron executed once (eveningTask)');
   const data = await readData();
   for (const guildId of Object.keys(data.guilds || {})) {
     const g = data.guilds[guildId];
     if (!g.progressChannel) continue;
     const ch = await client.channels.fetch(g.progressChannel).catch(() => null);
     if (ch) {
-      const embed = new EmbedBuilder()
-        .setColor(0x0099FF)
-        .setDescription(['📌 **Reminder**', '', '⏳ Post a progress screenshot to keep your streak alive — consistency wins.'].join('\n'))
-        .setTimestamp();
-      await ch.send({ embeds: [embed] }).catch(() => null);
+        const todayKey = new Date().toISOString().slice(0,10);
+        let claimed = false;
+        try { claimed = await claimGuildKeyForDate(guildId, 'lastEveningDate', todayKey); } catch (e) { console.error('Claiming evening slot failed', e); claimed = false; }
+        if (!claimed) {
+          console.log('Evening reminder already sent or claimed for', guildId);
+          continue;
+        }
+        if (global.isSendingInfo) {
+          await clearGuildProcessing(guildId, 'lastEveningDate');
+          continue;
+        }
+        try {
+          const embed = new EmbedBuilder()
+            .setColor(0x0099FF)
+            .setDescription(['📌 **Reminder**', '', '⏳ Post a progress screenshot to keep your streak alive — consistency wins.'].join('\n'))
+            .setTimestamp();
+          await ch.send({ embeds: [embed] }).catch(() => { throw new Error('send failed'); });
+          await finalizeGuildDate(guildId, 'lastEveningDate', todayKey);
+        } catch (e) { console.error('Evening reminder error', e); await clearGuildProcessing(guildId, 'lastEveningDate'); }
     }
   }
 }
 
 async function nightTask(client) {
   console.log('Cron: night task running');
+  console.log('cron executed once (nightTask)');
   const data = await readData();
   const now = Date.now();
   for (const guildId of Object.keys(data.guilds || {})) {
@@ -331,21 +360,28 @@ async function nightTask(client) {
     }
     const ch = await client.channels.fetch(g.questChannel).catch(() => null);
     if (ch) {
-        const users = Object.entries(data.users || {}).map(([id, u]) => ({ id, progressPoints: u.progressPoints || 0 }));
-        users.sort((a, b) => b.progressPoints - a.progressPoints);
-        const top = users.slice(0, 5).map((u, i) => {
-          if (i === 0) return `🥇 1. <@${u.id}> — ${u.progressPoints} pts`;
-          if (i === 1) return `🥈 2. <@${u.id}> — ${u.progressPoints} pts`;
-          if (i === 2) return `🥉 3. <@${u.id}> — ${u.progressPoints} pts`;
-          return `${i + 1}. <@${u.id}> — ${u.progressPoints} pts`;
-        }).join('\n') || 'No users yet.';
-        const embed = new EmbedBuilder()
-          .setTitle('🏆 TOP LEARNERS')
-          .setDescription(top)
-          .setColor(0xFFD700)
-          .setTimestamp()
-          .setFooter({ text: '⚡ Zenith Learning System' });
-        await ch.send({ embeds: [embed] }).catch(() => null);
+        const todayKey = new Date().toISOString().slice(0,10);
+        let claimed = false;
+        try { claimed = await claimGuildKeyForDate(guildId, 'lastNightDate', todayKey); } catch (e) { console.error('Claiming night slot failed', e); claimed = false; }
+        if (!claimed) { console.log('Night leaderboard already sent or claimed for', guildId); continue; }
+        try {
+          const users = Object.entries(data.users || {}).map(([id, u]) => ({ id, progressPoints: u.progressPoints || 0 }));
+          users.sort((a, b) => b.progressPoints - a.progressPoints);
+          const top = users.slice(0, 5).map((u, i) => {
+            if (i === 0) return `🥇 1. <@${u.id}> — ${u.progressPoints} pts`;
+            if (i === 1) return `🥈 2. <@${u.id}> — ${u.progressPoints} pts`;
+            if (i === 2) return `🥉 3. <@${u.id}> — ${u.progressPoints} pts`;
+            return `${i + 1}. <@${u.id}> — ${u.progressPoints} pts`;
+          }).join('\n') || 'No users yet.';
+          const embed = new EmbedBuilder()
+            .setTitle('🏆 TOP LEARNERS')
+            .setDescription(top)
+            .setColor(0xFFD700)
+            .setTimestamp()
+            .setFooter({ text: '⚡ Zenith Learning System' });
+          await ch.send({ embeds: [embed] }).catch(() => { throw new Error('send failed'); });
+          await finalizeGuildDate(guildId, 'lastNightDate', todayKey);
+        } catch (e) { console.error('Night leaderboard send error', e); await clearGuildProcessing(guildId, 'lastNightDate'); }
     }
   }
 }
@@ -389,33 +425,37 @@ function startCrons(client) {
         }
 
         // daily learning VC reminder
-        if (g.dailyLearnTime && g.dailyLearnTime === hhmm) {
-          const last = dailySent[guildId + '-dailyLearn'];
-          const todayKey = now.toISOString().slice(0,10);
-          // If we've scheduled a dedicated per-guild job for this guild, let that job handle the announcement
-          if (guildDailyJobs.has(guildId)) {
-            // per-guild cron will trigger at the same time; skip per-minute dispatcher
-            console.log('Skipping per-minute VC reminder because per-guild job exists for', guildId);
-            continue;
-          }
-          if (last !== todayKey) {
-            dailySent[guildId + '-dailyLearn'] = todayKey;
-            const announceId = g.vcReminder && g.vcReminder.announceChannelId ? g.vcReminder.announceChannelId : null;
-            const targetChId = announceId || g.progressChannel || g.questChannel;
-            const ch = targetChId ? await client.channels.fetch(targetChId).catch(() => null) : null;
-            const vcMention = g.vcReminder && g.vcReminder.channelId ? `<#${g.vcReminder.channelId}>` : '';
-            if (ch) {
-              const embed = {
-                title: '🔥 DAILY LEARNING TIME!',
-                description: `⏰ Time: ${g.dailyLearnTime}\n🎧 Join VC: ${vcMention}\n📚 Duration: 10 minutes\n\n💡 Just 10 minutes daily can change your future.`,
-                footer: { text: "Let's grow together!" },
-                timestamp: new Date()
-              };
-              await ch.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } }).catch(() => null);
-              console.log('VC reminder triggered for', guildId, g.dailyLearnTime, 'announced in', ch && ch.id);
+            if (g.dailyLearnTime && g.dailyLearnTime === hhmm) {
+              const todayKey = now.toISOString().slice(0,10);
+              // If we've scheduled a dedicated per-guild job for this guild, let that job handle the announcement
+              if (guildDailyJobs.has(guildId)) {
+                console.log('Skipping per-minute VC reminder because per-guild job exists for', guildId);
+                continue;
+              }
+              // claim slot to avoid cross-process duplicates
+              let claimed = false;
+              try { claimed = await claimGuildKeyForDate(guildId, 'lastDailyLearnDate', todayKey); } catch (e) { console.error('Claiming daily learn slot failed', e); claimed = false; }
+              if (!claimed) { console.log('Daily learn reminder already sent or claimed for', guildId); continue; }
+              const announceId = g.vcReminder && g.vcReminder.announceChannelId ? g.vcReminder.announceChannelId : null;
+              const targetChId = announceId || g.progressChannel || g.questChannel;
+              const ch = targetChId ? await client.channels.fetch(targetChId).catch(() => null) : null;
+              const vcMention = g.vcReminder && g.vcReminder.channelId ? `<#${g.vcReminder.channelId}>` : '';
+              if (ch) {
+                try {
+                  const embed = {
+                    title: '🔥 DAILY LEARNING TIME!',
+                    description: `⏰ Time: ${g.dailyLearnTime}\n🎧 Join VC: ${vcMention}\n📚 Duration: 10 minutes\n\n💡 Just 10 minutes daily can change your future.`,
+                    footer: { text: "Let's grow together!" },
+                    timestamp: new Date()
+                  };
+                  await ch.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } }).catch(() => { throw new Error('send failed'); });
+                  await finalizeGuildDate(guildId, 'lastDailyLearnDate', todayKey);
+                  console.log('VC reminder triggered for', guildId, g.dailyLearnTime, 'announced in', ch && ch.id);
+                } catch (e) { console.error('Failed to send VC reminder', e); await clearGuildProcessing(guildId, 'lastDailyLearnDate'); }
+              } else {
+                await clearGuildProcessing(guildId, 'lastDailyLearnDate');
+              }
             }
-          }
-        }
 
         // Quote schedule (per-guild)
         if (g.quoteSchedule && g.quoteSchedule.time === hhmm) {
@@ -450,29 +490,40 @@ function startCrons(client) {
         // Information schedule (per-guild)
         if (g.infoSchedule && g.infoSchedule.time === hhmm) {
           const todayKey = now.toISOString().slice(0,10);
-          if (!g.lastInfoDate || g.lastInfoDate !== todayKey) {
-            const ch = g.infoSchedule.channelId ? await client.channels.fetch(g.infoSchedule.channelId).catch(() => null) : null;
-            if (ch) {
-              if (global.isSendingInfo) {
-                console.log('Info send skipped due to runtime lock for', guildId);
-              } else {
-                global.isSendingInfo = true;
-                try {
-                  const pick = pickRandomAvoidRepeat(TECH_INFO, g.lastInfoIndex);
-                  const info = pick.item;
-                  const embed = new EmbedBuilder()
-                    .setTitle('📢 Daily Learning Tip')
-                    .setColor(0x7B61FF)
-                    .setDescription([`🧠 Topic: ${info.split(':')[0] || 'General'}`, '', `💡 Tip:\n"${info.replace(/^\w+:\s*/,'')}"`, '', '🚀 Small knowledge daily = big growth!'].join('\n'))
-                    .setFooter({ text: 'Keep learning 🚀' })
-                    .setTimestamp();
-                  await ch.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } }).catch(() => null);
-                  await updateGuild(guildId, { lastInfoDate: todayKey, lastInfoIndex: pick.index });
-                  console.log('Info sent to', guildId, g.infoSchedule.channelId);
-                } catch (e) { console.error('Info send error', e); }
-                finally { global.isSendingInfo = false; }
-              }
+          // Atomically claim the guild's info slot to avoid cross-process duplicates
+          let claimed = false;
+          try {
+            claimed = await claimGuildKeyForDate(guildId, 'lastInfoDate', todayKey);
+          } catch (e) { console.error('Claiming guild info slot failed', e); claimed = false; }
+          if (!claimed) {
+            console.log('Info already sent or claimed for', guildId);
+            continue;
+          }
+          const ch = g.infoSchedule.channelId ? await client.channels.fetch(g.infoSchedule.channelId).catch(() => null) : null;
+          if (ch) {
+            if (global.isSendingInfo) {
+              console.log('Info send skipped due to runtime lock for', guildId);
+              await clearGuildProcessing(guildId, 'lastInfoDate');
+            } else {
+              global.isSendingInfo = true;
+              try {
+                const pick = pickRandomAvoidRepeat(TECH_INFO, g.lastInfoIndex);
+                const info = pick.item;
+                const embed = new EmbedBuilder()
+                  .setTitle('📢 Daily Learning Tip')
+                  .setColor(0x7B61FF)
+                  .setDescription([`🧠 Topic: ${info.split(':')[0] || 'General'}`, '', `💡 Tip:\n"${info.replace(/^\w+:\s*/,'')}"`, '', '🚀 Small knowledge daily = big growth!'].join('\n'))
+                  .setFooter({ text: 'Keep learning 🚀' })
+                  .setTimestamp();
+                await ch.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } }).catch(() => { throw new Error('send failed'); });
+                await finalizeGuildDate(guildId, 'lastInfoDate', todayKey, { lastInfoIndex: pick.index });
+                console.log('Info sent to', guildId, g.infoSchedule.channelId);
+              } catch (e) { console.error('Info send error', e); await clearGuildProcessing(guildId, 'lastInfoDate'); }
+              finally { global.isSendingInfo = false; }
             }
+          } else {
+            // no channel found — clear processing marker
+            await clearGuildProcessing(guildId, 'lastInfoDate');
           }
         }
       }
@@ -525,14 +576,21 @@ async function scheduleGuildDaily(client, guildId, time, vcReminder) {
         const ch = targetChId ? await client.channels.fetch(targetChId).catch(() => null) : null;
         const vcMention = (vcReminder && vcReminder.channelId) || (g && g.vcReminder && g.vcReminder.channelId) ? `<#${(vcReminder && vcReminder.channelId) || (g && g.vcReminder && g.vcReminder.channelId)}>` : '';
         if (ch) {
-          const embed = {
-            title: '🔥 DAILY LEARNING TIME! ',
-            description: `⏰ Time: ${time}\n🎧 Join VC: ${vcMention}\n📚 Duration: 10 Minutes\n\n💡 "Just 10 minutes daily can change your future."`,
-            footer: { text: "Let's grow together!" },
-            timestamp: new Date()
-          };
-          await ch.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } }).catch(() => null);
-          console.log('VC reminder sent for', guildId, 'announced in', ch.id);
+          const todayKey = new Date().toISOString().slice(0,10);
+          let claimed = false;
+          try { claimed = await claimGuildKeyForDate(guildId, 'lastDailyLearnDate', todayKey); } catch (e) { console.error('Claiming scheduled daily slot failed', e); claimed = false; }
+          if (!claimed) { console.log('Scheduled VC reminder already sent/claimed for', guildId); return; }
+          try {
+            const embed = {
+              title: '🔥 DAILY LEARNING TIME! ',
+              description: `⏰ Time: ${time}\n🎧 Join VC: ${vcMention}\n📚 Duration: 10 Minutes\n\n💡 "Just 10 minutes daily can change your future."`,
+              footer: { text: "Let's grow together!" },
+              timestamp: new Date()
+            };
+            await ch.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } }).catch(() => { throw new Error('send failed'); });
+            await finalizeGuildDate(guildId, 'lastDailyLearnDate', todayKey);
+            console.log('VC reminder sent for', guildId, 'announced in', ch.id);
+          } catch (e) { console.error('Scheduled VC send failed', e); await clearGuildProcessing(guildId, 'lastDailyLearnDate'); }
         }
       } catch (e) {
         console.error('Error in scheduled daily job for', guildId, e);
